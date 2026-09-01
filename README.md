@@ -57,6 +57,7 @@ npm install --global @deepseek-ai/dsh@0.1.2-alpha.2
 
   | Package | Version |
   |---|---|
+  | `@deepseek-ai/dsh-api-remotes` | `^0.1.2-alpha.2` |
   | `@deepseek-ai/dsh-tools` | `^0.1.2-alpha.2` |
   | `@deepseek-ai/dsh-typert-protocol` | `^0.1.2-alpha.2` |
   | `@deepseek-ai/dsh-web` | `^0.1.2-alpha.2` |
