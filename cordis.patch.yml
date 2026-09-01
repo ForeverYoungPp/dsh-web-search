@@ -1,0 +1,26 @@
+# dsh-web-search published bundle patch (consumed by `dsh plugin add`)
+#
+# This file is declared via package.json `dsh.bundle.patch` and ships inside
+# the published npm package. Installing the package with
+#   dsh plugin --profile web add @deepseek-ai/dsh-web-search
+# makes it a profile bundle: this patch is applied on every launch of the
+# web profile (persistent), as opposed to patch.web.yml which is an ephemeral
+# `--patch` overlay for local development (insert name: relative source path
+# './src/index.js').
+#
+# The insert name is the Node-resolvable package name — quoted because `@` is a
+# reserved YAML indicator and cannot start a bare scalar — resolved from the
+# profile's node_modules by `dsh plugin add`. A relative path like
+# './src/index.js' would anchor to the profile directory and fail to resolve.
+
+- insert:
+    - id: dsh-web-search
+      name: '@deepseek-ai/dsh-web-search'
+
+# Override of an existing row (- id: web) is a top-level entry, not a child of
+# - insert:. Applying the patch installs the override immediately: the native
+# web row routes its web_search tool through dsh-web-search (A1 replace).
+- id: web
+  config:
+    searchProvider: dsh-web-search
+    fetchProvider: http

@@ -1,0 +1,21 @@
+# dsh-web-search local development overlay (loads local source via --patch, no build required)
+#
+# Usage:
+#   pnpm dsh web --patch D:/development/dsh-web-search/patch.web.yml   # run inside the D:/development/deepseek-harness source workspace (web is an alias for --profile web)
+#
+# The relative path of the row name is anchored to this file's directory (the loader's anchorInsertedPluginNames converts
+# ./ and ../ to file:// URLs). The browser half is handled by client-modules, which walks up from src/index.js
+# to find package.json's dsh.client manifest and injects the bundle pointed to by exports["./client"] into the
+# startup graph (src/client/bundle.js is a hand-written factory format, no bundler needed).
+#
+# Note: override of an existing row (- id: web) is a top-level entry, not a child of - insert:.
+# insert is only for new rows; override modifies the row's config (name and inject keep the original row values).
+
+- insert:
+    - id: dsh-web-search
+      name: './src/index.js'
+
+- id: web
+  config:
+    searchProvider: dsh-web-search
+    fetchProvider: http

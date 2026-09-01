@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# OS leftovers
+.DS_Store
+Thumbs.db
+
+# Local temp
+.tmp
+*.tmp
+tempdsh-sandbox/
+
+# Dynamic plugin recovery baseline (local only, never publish)
+plugin/
+# Packaging artifacts (local only, never commit)
+*.tgz
