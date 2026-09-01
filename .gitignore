@@ -17,3 +17,6 @@ tempdsh-sandbox/
 plugin/
 # Packaging artifacts (local only, never commit)
 *.tgz
+
+# Internal handoff doc (local only, never publish)
+HANDOVER.md
