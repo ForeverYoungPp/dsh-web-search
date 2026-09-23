@@ -33,6 +33,7 @@ import {
   PROVIDER_SPECS,
   classifyConnectionTest,
   capSnippets,
+  capAnswer,
 } from './host-core.js'
 
 export const name = 'dsh-web-search'
@@ -203,6 +204,7 @@ export function apply(ctx) {
   }
 
   async function executeSearch(params, execOpts) {
+    const startedAt = Date.now()
     const signal = execOpts && execOpts.signal
     const order = await resolveCandidates()
     let lastProvider = null
@@ -238,12 +240,19 @@ export function apply(ctx) {
           // this used to) kept the seam from ever seeing length > maxResults, so a capped list
           // was presented as complete.
           //
-          // Snippets are capped to the native citation ceiling first: providers hand back
-          // SERP/page text of their own choosing (Tavily ~1.2 kB per result) while the native
-          // path can only ever show 150 characters of a cited excerpt.
+          // Snippets are cleaned (Tavily returns raw page chunks) and capped to the native
+          // citation ceiling, and the provider's own answer is bounded too: Tavily answers a
+          // multi-query search with a ~1 kB report, which is more than the card can show.
           const capped = capSnippets(response)
+          const answer = response.answer ? capAnswer(response.answer) : ''
+          // The web_search tool has no field for the serving provider: its result projection keeps
+          // only content/sources/truncated, `searchMetaFromValue` builds the card meta from exactly
+          // those plus `answer`, and the client card model reads only those. So the provider is
+          // reported here, on the host log, where a chain being debugged can be audited.
+          console.log('[dsh-web-search] served by ' + (lastProvider ? lastProvider.label : 'unknown') +
+            ' (' + (capped.sources ? capped.sources.length : 0) + ' sources, ' + (Date.now() - startedAt) + 'ms)')
           return {
-            ...(capped.answer ? { content: capped.answer } : {}),
+            ...(answer ? { content: answer } : {}),
             sources: capped.sources || [],
             truncated: false,
           }
