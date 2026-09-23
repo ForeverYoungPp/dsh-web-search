@@ -229,6 +229,9 @@ export function apply(ctx) {
           continue
         }
         lastProvider = provider
+        // Log the attempt before awaiting it: a stalled provider then shows up as a "trying"
+        // line with no completion line after it, instead of looking like a hung search.
+        console.log('[' + stamp + '] [dsh-web-search] trying ' + id)
         const response = await provider.search({
           query: params.query,
           limit: params.limit,

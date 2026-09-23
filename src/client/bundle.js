@@ -560,7 +560,17 @@ window.__ModuleLoader__.load({
       // bound `t` reads the active locale at call time, so it follows a language switch.
       var locale = ctx.locale;
       var t = locale ? locale.bind(NS) : function (key) { return EN[key] || key; };
-      if (locale) ctx.effect(function () { return locale.register(NS, { en: EN, zh: ZH }); });
+      if (locale) {
+        try {
+          ctx.effect(function () { return locale.register(NS, { en: EN, zh: ZH }); });
+        } catch (e) {
+          // A live plugin reload materializes this bundle a second time and the namespace already
+          // carries our dictionaries; register() throws "locale namespace ... already has locale"
+          // (dsh-client-locale/lib/client.js:1264) and that must not take the whole client half
+          // down - the bound `t` works either way.
+          console.warn('[dsh-web-search] locale dictionaries were already registered: ' + ((e && e.message) || String(e)));
+        }
+      }
 
       // Nothing to undo: the <style> element lives as long as the document, like the host's own
       // injected stylesheets, and apply() only runs once per materialization.
