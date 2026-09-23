@@ -353,10 +353,19 @@ export function hostOf(site) {
 }
 
 /**
+ * Ceiling for a snippet carved out of a scraped page body. Anthropic's citation excerpt — the
+ * only snippet the native `deepseek-official` provider can produce — is documented as "up to
+ * 150 characters of the cited content", and the native path never shows more. A provider's own
+ * SERP description is passed through as the provider sized it; anything derived from a whole
+ * document is held to this ceiling.
+ */
+const SNIPPET_MAX = 150
+
+/**
  * Build a SERP-sized snippet: the short field when it has content, otherwise a bounded,
  * whitespace-collapsed prefix of the long one. Some providers return whole documents —
- * Firecrawl's scraped `markdown`, Jina's `content` — and a full page must never reach the
- * result card or the model-facing output.
+ * Firecrawl's scraped `markdown`, Jina's `content`, Exa's `text` — and a full page must never
+ * reach the result card or the model-facing output.
  * @param {unknown} short Short field (a search-result description)
  * @param {unknown} long Long field (a scraped page body)
  * @returns {string}
@@ -364,7 +373,7 @@ export function hostOf(site) {
 function boundedSnippet(short, long) {
   if (typeof short === 'string' && short.trim()) return short.trim()
   const text = typeof long === 'string' ? long.replace(/\s+/g, ' ').trim() : ''
-  return text.slice(0, 500)
+  return text.slice(0, SNIPPET_MAX)
 }
 
 /**
@@ -545,8 +554,9 @@ export function buildExaRequest(params, key) {
 }
 
 /**
- * Normalize Exa response. snippet takes summary|text|highlights concatenated (truncated to 500);
- * answer synthesized by synthesizeAnswer.
+ * Normalize Exa response. The summary wins; a `text` body or joined `highlights` fall back
+ * through the same bounded guard as the other page-body providers; answer synthesized by
+ * synthesizeAnswer.
  * @param {any} data
  * @returns {SearchResponse}
  */
@@ -559,8 +569,8 @@ export function normalizeExaResponse(data) {
       if (!url) continue
       /** @type {SearchSource} */
       const source = { url, title: (r && r.title) || hostOf(url) || 'Untitled' }
-      const snippet = (r && (r.summary || r.text || (Array.isArray(r.highlights) ? r.highlights.filter(Boolean).join(' ') : undefined)))
-      if (snippet) source.snippet = snippet.length > 500 ? snippet.slice(0, 500) : snippet
+      const snippet = boundedSnippet(r && r.summary, r && (r.text || (Array.isArray(r.highlights) ? r.highlights.filter(Boolean).join(' ') : undefined)))
+      if (snippet) source.snippet = snippet
       const publishedAt = r && r.publishedDate
       if (publishedAt) source.publishedAt = publishedAt
       sources.push(source)

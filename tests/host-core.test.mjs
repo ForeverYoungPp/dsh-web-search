@@ -486,7 +486,7 @@ test('normalizeFirecrawlResponse: handles both data array and data.web shapes', 
 test('normalizeFirecrawlResponse: the scraped page never becomes the snippet', () => {
   const page = '# Title\n\n' + 'word '.repeat(2000) // ~10k chars, like a real scraped page
   const capped = normalizeFirecrawlResponse({ data: [{ url: 'https://c.com', title: 'C', markdown: page }] })
-  assert.equal(capped.sources[0].snippet.length, 500)
+  assert.equal(capped.sources[0].snippet.length, 150)
   assert.ok(!capped.sources[0].snippet.includes('\n'), 'markdown whitespace is collapsed')
   // A short field always wins over the page body.
   const short = normalizeFirecrawlResponse({ data: [{ url: 'https://d.com', description: 'short', markdown: page }] })
@@ -526,9 +526,17 @@ test('normalizeJinaResponse: array or { code, data } shapes', () => {
 test('normalizeJinaResponse: a page body is capped, a description wins', () => {
   const page = 'body '.repeat(3000)
   const capped = normalizeJinaResponse([{ url: 'https://c.com', title: 'C', content: page }])
-  assert.equal(capped.sources[0].snippet.length, 500)
+  assert.equal(capped.sources[0].snippet.length, 150)
   const short = normalizeJinaResponse([{ url: 'https://d.com', title: 'D', description: 'd', content: page }])
   assert.equal(short.sources[0].snippet, 'd')
+})
+
+test('normalizeExaResponse: summary wins, a text body falls back through the same cap', () => {
+  const page = 'text '.repeat(2000)
+  const capped = normalizeExaResponse({ results: [{ url: 'https://c.com', title: 'C', text: page }] })
+  assert.equal(capped.sources[0].snippet.length, 150)
+  const short = normalizeExaResponse({ results: [{ url: 'https://d.com', title: 'D', summary: 's', text: page }] })
+  assert.equal(short.sources[0].snippet, 's')
 })
 
 // ─── Kagi ───
