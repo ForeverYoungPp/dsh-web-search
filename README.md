@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@deepseek-ai/dsh-web-search"><img src="https://img.shields.io/npm/v/@deepseek-ai/dsh-web-search?style=flat-square&amp;color=5B4CF0" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@ian_p/dsh-web-search"><img src="https://img.shields.io/npm/v/@ian_p/dsh-web-search?style=flat-square&amp;color=5B4CF0" alt="npm version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B7285?style=flat-square" alt="MIT license"></a>
   <a href="./patch.web.yml"><img src="https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square" alt="DSH Web and Headless"></a>
   <img src="https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-339933?style=flat-square&amp;logo=node.js" alt="Node version">
@@ -76,7 +76,7 @@ pnpm dsh web --patch D:/development/dsh-web-search/patch.web.yml
 - The relative row path is anchored to the patch file's directory and resolved to a `file://` URL, which Node's native ESM loads directly.
 - The browser half is discovered via `dsh.client` manifest + `exports["./client"]` in this project's `package.json`, pointing at `src/client/bundle.js` (a hand-written `__ModuleLoader__` factory, no bundler).
 
-Once published, install it persistently into the `web` profile with `dsh plugin --profile web add @deepseek-ai/dsh-web-search` (the package declares `dsh.bundle.patch`, so `dsh plugin add` activates it as a profile bundle); keep using `--patch` for local development.
+Once published, install it persistently into the `web` profile with `dsh plugin --profile web add @ian_p/dsh-web-search` (the package declares `dsh.bundle.patch`, so `dsh plugin add` activates it as a profile bundle); keep using `--patch` for local development.
 
 ### Published (installs from npm)
 
@@ -85,7 +85,7 @@ Host first, then plugin — the host must be pinned to `0.1.5-rc.3` (see [Requir
 ```bash
 npm install --global @deepseek-ai/dsh@0.1.5-rc.3   # host, 0.1.5 train (required)
 dsh --version
-dsh plugin --profile web add @deepseek-ai/dsh-web-search   # resolves @latest
+dsh plugin --profile web add @ian_p/dsh-web-search   # resolves @latest
 ```
 
 `dsh plugin add` resolves the plugin's `@latest` dist-tag and, because the package declares `dsh.bundle.patch`, activates it as a profile bundle.

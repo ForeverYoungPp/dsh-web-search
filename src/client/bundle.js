@@ -22,7 +22,7 @@
  */
 
 window.__ModuleLoader__.load({
-  id: '@deepseek-ai/dsh-web-search',
+  id: '@ian_p/dsh-web-search',
   factory: function (require) {
     var module = { exports: {} };
     var exports = module.exports;
@@ -604,7 +604,7 @@ window.__ModuleLoader__.load({
     }
 
     module.exports = {
-      name: '@deepseek-ai/dsh-web-search',
+      name: '@ian_p/dsh-web-search',
       inject: ['slots', 'remote', 'locale'],
       apply: apply,
       // Test-only handle on the pure state machine shipped above. The browser half

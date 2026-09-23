@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@deepseek-ai/dsh-web-search"><img src="https://img.shields.io/npm/v/@deepseek-ai/dsh-web-search?style=flat-square&amp;color=5B4CF0" alt="npm 版本"></a>
+  <a href="https://www.npmjs.com/package/@ian_p/dsh-web-search"><img src="https://img.shields.io/npm/v/@ian_p/dsh-web-search?style=flat-square&amp;color=5B4CF0" alt="npm 版本"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B7285?style=flat-square" alt="MIT 许可证"></a>
   <a href="./patch.web.yml"><img src="https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square" alt="DSH Web 与 Headless"></a>
   <img src="https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-339933?style=flat-square&amp;logo=node.js" alt="Node 版本">
@@ -76,7 +76,7 @@ pnpm dsh web --patch D:/development/dsh-web-search/patch.web.yml
 - 相对行路径以补丁文件所在目录为基准，解析成 `file://` URL，由 Node 原生 ESM 直接加载。
 - 浏览器端通过本项目 `package.json` 的 `dsh.client` manifest + `exports["./client"]` 被发现，指向 `src/client/bundle.js`（手写 `__ModuleLoader__` factory，不使用打包器）。
 
-发布后可用 `dsh plugin --profile web add @deepseek-ai/dsh-web-search` 持久安装到 `web` profile（包声明了 `dsh.bundle.patch`，`dsh plugin add` 会把它激活为 profile bundle）；本地开发继续用 `--patch`。
+发布后可用 `dsh plugin --profile web add @ian_p/dsh-web-search` 持久安装到 `web` profile（包声明了 `dsh.bundle.patch`，`dsh plugin add` 会把它激活为 profile bundle）；本地开发继续用 `--patch`。
 
 ### 发布版（从 npm 安装）
 
@@ -85,7 +85,7 @@ pnpm dsh web --patch D:/development/dsh-web-search/patch.web.yml
 ```bash
 npm install --global @deepseek-ai/dsh@0.1.5-rc.3   # 宿主，0.1.5 列车（必需）
 dsh --version
-dsh plugin --profile web add @deepseek-ai/dsh-web-search   # 解析 @latest
+dsh plugin --profile web add @ian_p/dsh-web-search   # 解析 @latest
 ```
 
 `dsh plugin add` 解析插件的 `@latest` dist-tag；由于包声明了 `dsh.bundle.patch`，安装即激活为 profile bundle。

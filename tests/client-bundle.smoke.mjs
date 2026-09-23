@@ -35,14 +35,14 @@ const fakeRequire = (spec) => {
 captured = null
 vm.runInNewContext(code, sandbox, { filename: 'src/client/bundle.js' })
 
-if (!captured || captured.id !== '@deepseek-ai/dsh-web-search') {
+if (!captured || captured.id !== '@ian_p/dsh-web-search') {
   throw new Error('registration not captured: ' + JSON.stringify(captured && captured.id))
 }
 const exported = captured.factory(fakeRequire)
 console.log('exported keys:', Object.keys(exported).join(', '))
 console.log('name:', exported.name)
 console.log('inject:', JSON.stringify(exported.inject))
-if (exported.name !== '@deepseek-ai/dsh-web-search') throw new Error('bad name')
+if (exported.name !== '@ian_p/dsh-web-search') throw new Error('bad name')
 if (typeof exported.apply !== 'function') throw new Error('apply missing')
 
 // Validate inject payload

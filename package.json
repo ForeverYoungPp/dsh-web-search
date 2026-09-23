@@ -1,5 +1,5 @@
 {
-  "name": "@deepseek-ai/dsh-web-search",
+  "name": "@ian_p/dsh-web-search",
   "version": "0.1.5-rc.3",
   "description": "Multi-provider third-party web search for the DeepSeek Harness: routes the native web_search tool through a configurable provider fallback chain, with an isolated provider settings page.",
   "type": "module",
