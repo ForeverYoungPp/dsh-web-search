@@ -158,44 +158,50 @@ window.__ModuleLoader__.load({
     };
 
     // ================= Host-native stylesheet =================
-    // A hand-written bundle cannot import the host's CSS modules, so the values below are copied
-    // from the host's own components on this train (settings-models / settings-plugin-inventory /
-    // locale / theme) and every rule consumes --dsw-* tokens, so light/dark follows the host.
-    // Geometry copied verbatim: buttons 28/14/12-18 (host row-action size), inputs 32/8/14-22,
-    // cards 14 radius + elevation stroke + 12/14 padding, section gap 14 + max-width 760.
+    // A hand-written bundle cannot import the host's CSS modules, so these rules are copied from
+    // the page the user compares against: the Plugins settings page
+    // (dsh-client-ui-settings-plugins/lib/client.js on this train). Geometry and colours come
+    // from its card / header / field / footer / save / discard rules, and every value consumes a
+    // --dsw-* token so light and dark follow the host. Two deliberate deviations:
+    //   * error text uses --dsw-alias-state-error-primary, because the page's own
+    //     --dsw-alias-label-error is referenced but defined nowhere on this train (an invalid
+    //     declaration that would fall back to inherited colour); state-error-primary is the
+    //     token the host uses for errors everywhere else.
+    //   * the input keeps a focus border and the buttons a :hover tint, which the copied rules
+    //     omit; both use host tokens and exist for keyboard/accessibility feedback.
     var STYLES = [
       '.dws-page{padding:16px}',
-      '.dws-section{display:flex;flex-direction:column;gap:14px;max-width:760px;color:var(--dsw-alias-label-primary)}',
-      '.dws-title{margin:0;font-size:16px;font-weight:500;line-height:24px;color:var(--dsw-alias-label-primary)}',
-      '.dws-desc{margin:0;font-size:14px;line-height:22px;color:var(--dsw-alias-label-tertiary)}',
-      '.dws-alert{padding:10px 12px;border-radius:10px;font-size:13px;line-height:20px;background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary)}',
-      '.dws-card{box-sizing:border-box;background:var(--dsw-alias-bg-layer-3);border:0;border-radius:14px;box-shadow:var(--dsw-elevation-stroke);padding:12px 14px}',
-      '.dws-card--idle{opacity:.6}',
-      '.dws-card-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}',
-      '.dws-row-title{margin:0;font-size:14px;font-weight:500;line-height:22px;color:var(--dsw-alias-label-primary)}',
-      '.dws-status{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}',
-      '.dws-note{margin-top:10px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}',
-      '.dws-dot{flex:none;display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--dsw-alias-label-dimmed)}',
+      '.dws-section{display:flex;flex-direction:column;gap:12px;max-width:760px;color:var(--dsw-alias-label-primary)}',
+      '.dws-heading{margin:0;font-size:18px;font-weight:600}',
+      '.dws-intro{margin:0;font-size:13px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}',
+      '.dws-alert{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-state-error-primary)}',
+      '.dws-empty{margin:0;font-size:13px;color:var(--dsw-alias-label-tertiary)}',
+      '.dws-cards{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}',
+      '.dws-card{border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-layer-3);border-radius:16px;transition:border-color .16s,background .16s}',
+      '.dws-card--idle{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-label-dimmed)}',
+      '.dws-card-head{display:flex;align-items:center;gap:12px;padding:14px 16px}',
+      '.dws-head-text{display:flex;flex-direction:column;flex:1;gap:4px;min-width:0}',
+      '.dws-name{margin:0;font-size:15px;font-weight:600;line-height:1.4;color:var(--dsw-alias-label-primary)}',
+      '.dws-desc{margin:0;font-size:13px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}',
+      '.dws-dot{flex:none;display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-dimmed)}',
       '.dws-dot--on{background:var(--dsw-alias-state-success-primary)}',
-      '.dws-row{display:flex;align-items:center;gap:8px}',
-      '.dws-row+.dws-row{margin-top:10px}',
-      '.dws-input{box-sizing:border-box;flex:1 1 auto;min-width:0;height:32px;padding:0 10px;border:.5px solid var(--dsw-alias-border-l4);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;line-height:22px}',
+      '.dws-body{display:flex;flex-direction:column;gap:6px;margin:0 16px;padding:12px 0;border-top:.5px solid var(--dsw-alias-border-l2)}',
+      '.dws-input{border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-layer-3);height:34px;font:inherit;color:var(--dsw-alias-label-primary);border-radius:8px;padding:0 12px;font-size:13px;line-height:1.5}',
       '.dws-input:focus{border-color:var(--dsw-alias-brand-primary);outline:none}',
       '.dws-input::placeholder{color:var(--dsw-alias-label-dimmed)}',
-      '.dws-input:disabled{opacity:.6;cursor:default;background:var(--dsw-alias-bg-layer-2)}',
-      '.dws-btn{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:4px;height:28px;padding:0 10px;border:0;border-radius:14px;font:inherit;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background-color .12s var(--ds-ease-in-out);background:transparent;color:var(--dsw-alias-label-primary)}',
-      '.dws-btn:disabled{opacity:.4;cursor:default}',
-      '.dws-btn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--dsw-alias-border-l3)}',
-      '.dws-btn--primary{background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground)}',
-      '.dws-btn--primary:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}',
-      '.dws-btn--secondary{border:.5px solid var(--dsw-alias-border-l3)}',
-      '.dws-btn--secondary:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}',
-      '.dws-btn--danger{color:var(--dsw-alias-state-error-primary)}',
-      '.dws-btn--danger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger)}',
-      '.dws-feedback{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}',
+      '.dws-input:disabled{opacity:.6;cursor:default}',
+      '.dws-footer{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:0 16px;padding:12px 0;border-top:.5px solid var(--dsw-alias-border-l2)}',
+      '.dws-slot{flex:1;min-width:0}',
+      '.dws-feedback{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}',
       '.dws-feedback--ok{color:var(--dsw-alias-state-success-primary)}',
       '.dws-feedback--err{color:var(--dsw-alias-state-error-primary)}',
-      '.dws-feedback-slot{min-height:18px}',
+      '.dws-btn{appearance:none;font:inherit;cursor:pointer;border:1px solid transparent;border-radius:8px;padding:5px 14px;font-size:13px;line-height:1.5;white-space:nowrap;background:transparent;color:var(--dsw-alias-label-primary)}',
+      '.dws-btn:disabled{opacity:.4;cursor:default}',
+      '.dws-btn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--dsw-alias-border-l3)}',
+      '.dws-btn--primary{background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-layer-3)}',
+      '.dws-btn--secondary{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}',
+      '.dws-btn--danger{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-state-error-primary)}',
+      '.dws-btn--secondary:hover:not(:disabled),.dws-btn--danger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}',
       '.dws-drag{cursor:grab}',
     ].join('\n')
 
@@ -371,20 +377,26 @@ window.__ModuleLoader__.load({
           return React.createElement('div', { className: 'dws-card' },
             React.createElement('div', { className: 'dws-card-head' },
               React.createElement('span', { className: 'dws-dot dws-dot--on' }),
-              React.createElement('span', { className: 'dws-row-title' }, p.label || p.id),
-              React.createElement('span', { className: 'dws-status' }, t('keylessNote')),
+              React.createElement('div', { className: 'dws-head-text' },
+                React.createElement('span', { className: 'dws-name' }, p.label || p.id),
+                React.createElement('span', { className: 'dws-desc' }, t('keylessNote')),
+              ),
             ),
-            React.createElement('div', { className: 'dws-note' }, t('keylessHint')),
+            React.createElement('div', { className: 'dws-body' },
+              React.createElement('p', { className: 'dws-desc' }, t('keylessHint')),
+            ),
           );
         }
 
         return React.createElement('div', { className: view.configured ? 'dws-card' : 'dws-card dws-card--idle' },
           React.createElement('div', { className: 'dws-card-head' },
             React.createElement('span', { className: view.configured ? 'dws-dot dws-dot--on' : 'dws-dot' }),
-            React.createElement('span', { className: 'dws-row-title' }, p.label || p.id),
-            React.createElement('span', { className: 'dws-status' }, t(view.statusKey)),
+            React.createElement('div', { className: 'dws-head-text' },
+              React.createElement('span', { className: 'dws-name' }, p.label || p.id),
+              React.createElement('span', { className: 'dws-desc' }, t(view.statusKey)),
+            ),
           ),
-          React.createElement('div', { className: 'dws-row' },
+          React.createElement('div', { className: 'dws-body' },
             React.createElement('input', {
               className: 'dws-input',
               type: view.inputType,
@@ -393,27 +405,26 @@ window.__ModuleLoader__.load({
               onChange: function (ev) { dispatch({ type: 'CHANGE_KEY', value: ev.target.value }); },
               placeholder: view.placeholderKey ? t(view.placeholderKey) : '',
             }),
-            React.createElement('button', {
-              className: 'dws-btn dws-btn--primary',
-              onClick: handleSave,
-              disabled: !view.canSave,
-            }, state.saving ? t('saving') : t('save')),
-            React.createElement('button', {
-              className: 'dws-btn dws-btn--danger',
-              onClick: handleClear,
-              disabled: !view.canClear,
-            }, state.clearing ? t('clearing') : t('clear')),
           ),
-          React.createElement('div', { className: 'dws-row' },
+          React.createElement('div', { className: 'dws-footer' },
+            React.createElement('div', { className: 'dws-slot' }, testFeedback, feedback),
             React.createElement('button', {
               className: 'dws-btn dws-btn--secondary',
               onClick: handleTest,
               disabled: !view.canTest,
               title: t('testHint'),
             }, state.testing ? t('testing') : t('test')),
-            React.createElement('div', { className: 'dws-feedback-slot' }, testFeedback),
+            React.createElement('button', {
+              className: 'dws-btn dws-btn--danger',
+              onClick: handleClear,
+              disabled: !view.canClear,
+            }, state.clearing ? t('clearing') : t('clear')),
+            React.createElement('button', {
+              className: 'dws-btn dws-btn--primary',
+              onClick: handleSave,
+              disabled: !view.canSave,
+            }, state.saving ? t('saving') : t('save')),
           ),
-          React.createElement('div', { className: 'dws-feedback-slot' }, feedback),
         );
       }
 
@@ -512,7 +523,9 @@ window.__ModuleLoader__.load({
         }, [data.providers, refreshProviders]);
 
         if (data.loading) {
-          return React.createElement('div', { className: 'dws-page dws-status' }, t('loading'));
+          return React.createElement('div', { className: 'dws-page' },
+            React.createElement('p', { className: 'dws-empty' }, t('loading')),
+          );
         }
 
         var cards = data.providers.map(function (p, i) {
@@ -530,10 +543,10 @@ window.__ModuleLoader__.load({
 
         return React.createElement('div', { className: 'dws-page' },
           React.createElement('div', { className: 'dws-section' },
-            React.createElement('h2', { className: 'dws-title' }, t('title')),
-            React.createElement('p', { className: 'dws-desc' }, t('description')),
-            data.error ? React.createElement('div', { className: 'dws-alert' }, data.error) : null,
-            React.createElement('div', { className: 'dws-section' }, cards),
+            React.createElement('h2', { className: 'dws-heading' }, t('title')),
+            React.createElement('p', { className: 'dws-intro' }, t('description')),
+            data.error ? React.createElement('p', { className: 'dws-alert' }, data.error) : null,
+            React.createElement('div', { className: 'dws-cards' }, cards),
           ),
         );
       }

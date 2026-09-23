@@ -65,10 +65,19 @@ const stubCtx = {
 await exported.apply(stubCtx)
 if (!mounted) throw new Error('$mount was not called')
 
-// The stylesheet must use the host's design tokens, not fixed values.
+// The stylesheet must use the host's design tokens, not fixed values, and the primary button
+// must follow the Plugins page contract (label-primary fill, bg-layer-3 text).
 if (!injected || !injected.textContent.includes('.dws-btn')) throw new Error('stylesheet was not injected')
-if (!injected.textContent.includes('var(--dsw-alias-button-primary-fill)')) {
-  throw new Error('stylesheet does not consume host tokens')
+for (const token of [
+  'var(--dsw-alias-label-primary)',
+  'var(--dsw-alias-border-l4)',
+  'var(--dsw-alias-bg-layer-3)',
+  'var(--dsw-alias-state-error-primary)',
+]) {
+  if (!injected.textContent.includes(token)) throw new Error(`stylesheet does not consume ${token}`)
+}
+if (!injected.textContent.includes('.dws-btn--primary{background:var(--dsw-alias-label-primary)')) {
+  throw new Error('primary button does not follow the host Plugins page contract')
 }
 if (injected.textContent.includes('#')) throw new Error('stylesheet contains a fixed colour')
 console.log('stylesheet injected:', injected.textContent.split('\n').length, 'rules, token-based only')
