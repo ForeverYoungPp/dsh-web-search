@@ -32,6 +32,8 @@ import {
   recordToConfig,
   PROVIDER_SPECS,
   classifyConnectionTest,
+  capSnippets,
+  capAnswer,
 } from './host-core.js'
 
 export const name = 'dsh-web-search'
@@ -64,20 +66,12 @@ export function apply(ctx) {
     return recordEndpoint(await readCredentialRecord(id))
   }
 
-  async function apiKeyAvailable(id) {
-    return (await readApiKey(id)) !== undefined
-  }
-
-  async function endpointAvailable(id) {
-    return (await readEndpoint(id)) !== undefined
-  }
-
   async function loadConfig() {
     const creds = getCredentials()
     if (!creds) return Object.assign({}, DEFAULT_CONFIG)
     try {
       return recordToConfig(await creds.readRecord(CONFIG_KEY), DEFAULT_CONFIG)
-    } catch (e) {
+    } catch {
       /* ignore */
     }
     return Object.assign({}, DEFAULT_CONFIG)
@@ -144,8 +138,8 @@ export function apply(ctx) {
       label: spec.label,
       available: async function () {
         if (spec.kind === 'none') return true
-        if (spec.kind === 'endpoint') return await endpointAvailable(spec.id)
-        return await apiKeyAvailable(spec.id)
+        if (spec.kind === 'endpoint') return (await readEndpoint(spec.id)) !== undefined
+        return (await readApiKey(spec.id)) !== undefined
       },
       search: async function (params) {
         let cred = null
@@ -175,7 +169,7 @@ export function apply(ctx) {
         let data
         try {
           data = JSON.parse(result.stdout)
-        } catch (e) {
+        } catch {
           throw new Error(spec.label + ' returned invalid JSON: ' + (result.stdout || '').slice(0, 200))
         }
         return spec.normalize(data)
@@ -200,12 +194,7 @@ export function apply(ctx) {
 
   async function resolveCandidates() {
     const config = await ensureConfig()
-    const order = resolveProviderOrder(config.order, Object.keys(PROVIDER_SPECS), config.exclude)
-    const candidates = []
-    for (let i = 0; i < order.length; i++) {
-      candidates.push({ id: order[i] })
-    }
-    return candidates
+    return resolveProviderOrder(config.order, Object.keys(PROVIDER_SPECS), config.exclude)
   }
 
   function hasRenderableContent(response) {
@@ -215,22 +204,34 @@ export function apply(ctx) {
   }
 
   async function executeSearch(params, execOpts) {
+    const startedAt = Date.now()
     const signal = execOpts && execOpts.signal
-    const candidates = await resolveCandidates()
-    const failures = []
+    const order = await resolveCandidates()
     let lastProvider = null
-    const effectiveMax = params.maxResults ?? params.num_search_results ?? params.limit ?? 5
-    for (let i = 0; i < candidates.length; i++) {
-      const cand = candidates[i]
-      const provider = getProvider(cand.id)
+    let lastError = null
+    /** Attempt chain for the host log: `id: reason` per provider tried or skipped. @type {string[]} */
+    const attempts = []
+    /** Wall-clock stamp so a burst pattern (and a provider's per-minute rate limit) is visible. */
+    const stamp = new Date().toTimeString().slice(0, 8)
+    // Requested result count. When the caller omits it, leave it undefined so each provider
+    // applies its own default — the native path works the same way (the seam asks for
+    // `maxResults`, the backend owns how many it returns).
+    const effectiveMax = params.maxResults ?? params.num_search_results ?? params.limit
+    for (let i = 0; i < order.length; i++) {
+      const id = order[i]
+      const provider = getProvider(id)
       if (!provider) continue
       try {
         const available = await provider.available()
         if (!available) {
-          failures.push({ id: cand.id, error: 'unavailable' })
+          attempts.push(id + ': not configured')
+          lastError = 'unavailable'
           continue
         }
         lastProvider = provider
+        // Log the attempt before awaiting it: a stalled provider then shows up as a "trying"
+        // line with no completion line after it, instead of looking like a hung search.
+        console.log('[' + stamp + '] [dsh-web-search] trying ' + id)
         const response = await provider.search({
           query: params.query,
           limit: params.limit,
@@ -240,26 +241,45 @@ export function apply(ctx) {
           signal: signal,
         })
         if (hasRenderableContent(response)) {
-          const sources = response.sources || []
+          // Hand the seam the provider's FULL source list and leave `truncated` false, exactly
+          // like the native deepseek-official provider does. The seam's capSources() slices to
+          // request.maxResults AND sets truncated: true, which is what surfaces the
+          // "sources truncated" notice to both the user and the model. Pre-slicing here (as
+          // this used to) kept the seam from ever seeing length > maxResults, so a capped list
+          // was presented as complete.
+          //
+          // Snippets are cleaned (Tavily returns raw page chunks) and capped to the native
+          // citation ceiling, and the provider's own answer is bounded too: Tavily answers a
+          // multi-query search with a ~1 kB report, which is more than the card can show.
+          const capped = capSnippets(response)
+          const answer = response.answer ? capAnswer(response.answer) : ''
+          // The web_search tool has no field for the serving provider: its result projection keeps
+          // only content/sources/truncated, `searchMetaFromValue` builds the card meta from exactly
+          // those plus `answer`, and the client card model reads only those. So the chain is
+          // reported here, on the host log, where a fallback being debugged can be audited: every
+          // provider that was skipped or failed, then the one that served.
+          console.log('[' + stamp + '] [dsh-web-search] ' + attempts.concat(id + ': served').join(' \u2192 ') +
+            ' (' + (capped.sources ? capped.sources.length : 0) + ' sources, ' + (Date.now() - startedAt) + 'ms)')
           return {
-            ...(response.answer ? { content: response.answer } : {}),
-            sources: sources.length > effectiveMax ? sources.slice(0, effectiveMax) : sources,
+            ...(answer ? { content: answer } : {}),
+            sources: capped.sources || [],
             truncated: false,
-            provider: lastProvider && lastProvider.label,
           }
         }
-        failures.push({ id: cand.id, error: 'no renderable content' })
+        lastError = 'no renderable content'
+        attempts.push(id + ': ' + lastError)
       } catch (e) {
         if (signal && signal.aborted) throw e
-        failures.push({ id: cand.id, error: e.message || String(e) })
+        lastError = e.message || String(e)
+        attempts.push(id + ': ' + String(lastError).slice(0, 120))
       }
     }
-    if (failures.length === 0) {
+    console.log('[' + stamp + '] [dsh-web-search] ' + attempts.concat('all providers failed').join(' \u2192 '))
+    if (!lastError) {
       return { content: 'Error: No web search provider configured.', sources: [], truncated: false }
     }
-    const lastErr = failures[failures.length - 1]
     return {
-      content: 'Error: ' + (lastProvider ? lastProvider.label + ' ' : '') + (lastErr.error || 'search failed'),
+      content: 'Error: ' + (lastProvider ? lastProvider.label + ' ' : '') + lastError,
       sources: [],
       truncated: false,
     }
@@ -281,7 +301,7 @@ export function apply(ctx) {
           try {
             const info = await creds.describeRecord(CREDENTIAL_KEYS[id])
             if (info) keyStatus = { configured: !!info.configured, source: 'plugin', writable: !!info.writable }
-          } catch (e) {
+          } catch {
             /* ignore */
           }
         }
@@ -413,7 +433,7 @@ export function apply(ctx) {
                 const fallback = await native.search(request, signal)
                 if (fallback && Array.isArray(fallback.sources)) return fallback
               }
-            } catch (e) {
+            } catch {
               /* native also failed, return our own error */
             }
           }
@@ -423,7 +443,7 @@ export function apply(ctx) {
       if (disposeProvider) ctx.effect(function () { return disposeProvider })
       // Read the runtime searchProviderId (WebRuntime's private field, at runtime it is a real property)
       let currentId = ''
-      try { currentId = web.searchProviderId } catch (e) { /* ignore */ }
+      try { currentId = web.searchProviderId } catch { /* ignore */ }
       console.log('[dsh-web-search] native web_search provider registered (id=dsh-web-search); searchProviderId=' + JSON.stringify(currentId) + ' — if searchProviderId is not dsh-web-search, native web_search will not use this plugin (will be AMBIGUOUS or fall back to deepseek)')
     }
   } catch (e) {

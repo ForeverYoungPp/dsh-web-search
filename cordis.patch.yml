@@ -2,7 +2,7 @@
 #
 # This file is declared via package.json `dsh.bundle.patch` and ships inside
 # the published npm package. Installing the package with
-#   dsh plugin --profile web add @deepseek-ai/dsh-web-search
+#   dsh plugin --profile web add @ian_p/dsh-web-search
 # makes it a profile bundle: this patch is applied on every launch of the
 # web profile (persistent), as opposed to patch.web.yml which is an ephemeral
 # `--patch` overlay for local development (insert name: relative source path
@@ -15,7 +15,7 @@
 
 - insert:
     - id: dsh-web-search
-      name: '@deepseek-ai/dsh-web-search'
+      name: '@ian_p/dsh-web-search'
 
 # Override of an existing row (- id: web) is a top-level entry, not a child of
 # - insert:. Applying the patch installs the override immediately: the native

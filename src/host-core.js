@@ -117,7 +117,7 @@ export function sanitizeProviderOrder(value) {
  * @returns {SetKeyResult}
  */
 export function validateSetKey(args) {
-  const id = args && args.id
+  const id = args && typeof args.id === 'string' ? args.id : ''
   const value = args && args.value
   const meta = PROVIDER_SPECS[id]
   if (!meta) return { ok: false, error: 'Unknown provider' }
@@ -141,7 +141,7 @@ export function validateSetKey(args) {
  * @returns {UnsetKeyResult}
  */
 export function validateUnsetKey(args) {
-  const id = args && args.id
+  const id = args && typeof args.id === 'string' ? args.id : ''
   const meta = PROVIDER_SPECS[id]
   if (!meta) return { ok: false, error: 'Unknown provider' }
   if (meta.kind === 'none') return { ok: false, error: 'Provider needs no API key' }
@@ -224,7 +224,9 @@ export function recordApiKey(record) {
 export function parseQuery(query) {
   const raw = typeof query === 'string' ? query : ''
   if (!raw.trim()) return { sites: [], excludedSites: [], cleaned: raw }
+  /** @type {string[]} */
   let sites = []
+  /** @type {string[]} */
   let excludedSites = []
   let cleaned = raw.trim()
 
@@ -249,17 +251,32 @@ export function parseQuery(query) {
  */
 export function buildTavilyBody(params) {
   const parsed = parseQuery(params && params.query)
+  // Not clampNumResults(): limit:0 must yield 1 result here, while clampNumResults maps
+  // any non-positive/invalid value to its default (10). See tests/host-core.test.mjs:175.
   const rawLimit = params && (params.maxResults ?? params.limit)
   const limit = rawLimit === undefined
     ? 10
     : Math.min(Math.max(Number(rawLimit) || 1, 1), 20)
+  /** @type {Record<string, unknown>} */
   const body = {
     query: parsed.cleaned || '',
     topic: 'general',
     include_answer: true,
+    // Tavily returns `results[].content` as up to three "chunks" (each <=500 characters, joined
+    // as `<chunk 1> [...] <chunk 2> [...] <chunk 3>` per the API reference), which is why the
+    // default answer looked like page chrome: measured on one query, default -> 1179/1333/242
+    // characters and result[1] opened with a navigation menu, while chunks_per_source: 1 ->
+    // 384/490/482 and result[1] opened with the article's own sentence. Nothing is lost
+    // downstream: snippets are cleaned and capped at SNIPPET_MAX before they reach the card.
+    chunks_per_source: 1,
+    // `published_date` is only returned when asked for (beta, default false). The native
+    // provider's `page_age` arrives by default, so without this a Tavily result carries no date
+    // at all - measured: null for some sources, "Mon, 07 Jul 2025 00:00:00 GMT" for others.
+    include_published_date: true,
     max_results: limit,
   }
   if (params && params.recency) {
+    /** @type {Record<string, string>} */
     const recencyMap = { day: 'd', week: 'w', month: 'm', year: 'y' }
     body.time_range = recencyMap[params.recency] || params.recency
   }
@@ -289,9 +306,11 @@ export function buildTavilyRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeTavilyResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   if (data && Array.isArray(data.results)) {
     for (const r of data.results) {
+      /** @type {SearchSource} */
       const source = {
         url: (r && r.url) || '',
         title: (r && r.title) || '',
@@ -342,6 +361,101 @@ export function hostOf(site) {
   const s = String(site || '').trim()
   if (!s) return ''
   return s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^\/\//, '').split('/')[0].split(/[?#]/)[0]
+}
+
+/**
+ * Ceiling for a snippet carved out of a scraped page body. Anthropic's citation excerpt — the
+ * only snippet the native `deepseek-official` provider can produce — is documented as "up to
+ * 150 characters of the cited content", and the native path never shows more. A provider's own
+ * SERP description is passed through as the provider sized it; anything derived from a whole
+ * document is held to this ceiling.
+ */
+const SNIPPET_MAX = 150
+
+/**
+ * Ceiling for the provider's own answer/summary when the tool returns one. Native
+ * `deepseek-official` never sends an answer, but Tavily answers a multi-query search with a
+ * small report (~1 kB, one `###` section per query); this keeps a summary without handing the
+ * card a wall of Markdown. Set to 0 to drop the answer entirely.
+ */
+const ANSWER_MAX = 400
+
+/**
+ * Build a SERP-sized snippet: the short field when it has content, otherwise a bounded,
+ * whitespace-collapsed prefix of the long one. Some providers return whole documents —
+ * Firecrawl's scraped `markdown`, Jina's `content`, Exa's `text` — and a full page must never
+ * reach the result card or the model-facing output.
+ * @param {unknown} short Short field (a search-result description)
+ * @param {unknown} long Long field (a scraped page body)
+ * @returns {string}
+ */
+function boundedSnippet(short, long) {
+  if (typeof short === 'string' && short.trim()) return short.trim()
+  const text = typeof long === 'string' ? long.replace(/\s+/g, ' ').trim() : ''
+  return text.slice(0, SNIPPET_MAX)
+}
+
+/**
+ * Turn a provider's page text into something that reads like a search-result snippet: strip
+ * Markdown image syntax and heading markers (Tavily returns raw page chunks, so snippets arrive
+ * as `# 标题 ### 小节` blocks), collapse every run of whitespace to one space, and drop leading
+ * punctuation left over from the page chrome (`|`, `-`, `:`, `、`). `C#` and `F#` survive,
+ * because a heading marker is only stripped at a line start or after whitespace.
+ * @param {unknown} text
+ * @returns {string}
+ */
+function cleanSnippet(text) {
+  return String(text == null ? '' : text)
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    // Tavily joins several chunks as `<chunk 1> [...] <chunk 2>`; the separator is not content.
+    .replace(/\s*\[\.{3}\]\s*/g, ' ')
+    .replace(/^[ \t]*#{1,6}[ \t]*/gm, '')
+    .replace(/\s#{1,6}\s+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s|\-\u2013\u2014\u00b7\u2022*,，.。/、:：)]+/, '')
+    .trim()
+}
+
+/**
+ * Clean one snippet and hold it to {@link SNIPPET_MAX}, marking a cut with an ellipsis.
+ * @param {unknown} text
+ * @returns {string}
+ */
+function capSnippet(text) {
+  const s = cleanSnippet(text)
+  return s.length > SNIPPET_MAX ? s.slice(0, SNIPPET_MAX - 1).trimEnd() + '\u2026' : s
+}
+
+/**
+ * Bound the provider's answer/summary. Whitespace and Markdown are preserved here (the card
+ * renders it as Markdown), only the length is cut, and `ANSWER_MAX = 0` removes it.
+ * @param {string} text
+ * @returns {string}
+ */
+export function capAnswer(text) {
+  if (ANSWER_MAX <= 0) return ''
+  const s = typeof text === 'string' ? text.trim() : ''
+  return s.length > ANSWER_MAX ? s.slice(0, ANSWER_MAX - 1).trimEnd() + '\u2026' : s
+}
+
+/**
+ * Apply {@link capSnippet} to every source of a normalized provider response. Applied once at
+ * the result boundary so all providers are measured against the same ceiling the native
+ * citation excerpt obeys: Tavily alone returns ~1.2 kB of page text per result, ~8x the 150
+ * characters `deepseek-official` can ever show.
+ * @param {SearchResponse} response
+ * @returns {SearchResponse}
+ */
+export function capSnippets(response) {
+  if (!response || !Array.isArray(response.sources)) return response
+  return {
+    ...response,
+    sources: response.sources.map((source) => (
+      source && typeof source.snippet === 'string'
+        ? { ...source, snippet: capSnippet(source.snippet) }
+        : source
+    )),
+  }
 }
 
 /**
@@ -425,6 +539,7 @@ export function buildUrlWithQuery(base, params) {
 
 export const BRAVE_URL = 'https://api.search.brave.com/res/v1/web/search'
 
+/** @type {Record<string, string>} */
 const BRAVE_RECENCY = { day: 'pd', week: 'pw', month: 'pm', year: 'py' }
 
 /**
@@ -435,6 +550,7 @@ const BRAVE_RECENCY = { day: 'pd', week: 'pw', month: 'pm', year: 'py' }
  * @returns {{ method: string, url: string, headers: Record<string,string> }}
  */
 export function buildBraveRequest(params, key) {
+  /** @type {Record<string, unknown>} */
   const queryParams = {
     q: (params && params.query) || '',
     count: String(clampNumResults(params && (params.maxResults ?? params.limit))),
@@ -458,11 +574,13 @@ export function buildBraveRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeBraveResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   const results = data && data.web && Array.isArray(data.web.results) ? data.web.results : []
   for (const r of results) {
     const url = r && r.url
     if (!url) continue
+    /** @type {SearchSource} */
     const source = { url, title: (r && r.title) || hostOf(url) || 'Untitled' }
     const snippets = []
     if (r && typeof r.description === 'string' && r.description.trim()) snippets.push(r.description.trim())
@@ -475,6 +593,7 @@ export function normalizeBraveResponse(data) {
     sources.push(source)
   }
   const requestId = data && data.web && data.web.request_id
+  /** @type {SearchResponse} */
   const response = { provider: 'brave', sources, authMode: 'api_key' }
   if (requestId) response.requestId = requestId
   return response
@@ -495,6 +614,7 @@ export const EXA_URL = 'https://api.exa.ai/search'
  */
 export function buildExaRequest(params, key) {
   const parsed = parseQuery(params && params.query)
+  /** @type {Record<string, unknown>} */
   const body = {
     query: parsed.cleaned || '',
     numResults: clampNumResults(params && (params.maxResults ?? params.limit)),
@@ -516,20 +636,23 @@ export function buildExaRequest(params, key) {
 }
 
 /**
- * Normalize Exa response. snippet takes summary|text|highlights concatenated (truncated to 500);
- * answer synthesized by synthesizeAnswer.
+ * Normalize Exa response. The summary wins; a `text` body or joined `highlights` fall back
+ * through the same bounded guard as the other page-body providers; answer synthesized by
+ * synthesizeAnswer.
  * @param {any} data
  * @returns {SearchResponse}
  */
 export function normalizeExaResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   if (data && Array.isArray(data.results)) {
     for (const r of data.results) {
       const url = r && r.url
       if (!url) continue
+      /** @type {SearchSource} */
       const source = { url, title: (r && r.title) || hostOf(url) || 'Untitled' }
-      const snippet = (r && (r.summary || r.text || (Array.isArray(r.highlights) ? r.highlights.filter(Boolean).join(' ') : undefined)))
-      if (snippet) source.snippet = snippet.length > 500 ? snippet.slice(0, 500) : snippet
+      const snippet = boundedSnippet(r && r.summary, r && (r.text || (Array.isArray(r.highlights) ? r.highlights.filter(Boolean).join(' ') : undefined)))
+      if (snippet) source.snippet = snippet
       const publishedAt = r && r.publishedDate
       if (publishedAt) source.publishedAt = publishedAt
       sources.push(source)
@@ -537,6 +660,7 @@ export function normalizeExaResponse(data) {
   }
   const answer = synthesizeAnswer(data && data.results)
   const requestId = data && data.requestId
+  /** @type {SearchResponse} */
   const response = { provider: 'exa', sources, authMode: 'api_key' }
   if (answer) response.answer = answer
   if (requestId) response.requestId = requestId
@@ -548,6 +672,7 @@ export function normalizeExaResponse(data) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const FIRECRAWL_URL = 'https://api.firecrawl.dev/v2/search'
+/** @type {Record<string, string>} */
 const FIRECRAWL_RECENCY = { day: 'qdr:d', week: 'qdr:w', month: 'qdr:m', year: 'qdr:y' }
 
 /**
@@ -558,6 +683,7 @@ const FIRECRAWL_RECENCY = { day: 'qdr:d', week: 'qdr:w', month: 'qdr:m', year: '
  * @returns {ProviderRequest}
  */
 export function buildFirecrawlRequest(params, key) {
+  /** @type {Record<string, unknown>} */
   const body = {
     query: (params && params.query) || '',
     limit: clampNumResults(params && (params.maxResults ?? params.limit)),
@@ -580,6 +706,17 @@ export function buildFirecrawlRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeFirecrawlResponse(data) {
+  // Firecrawl signals its own failures in the body (HTTP 200 with `success: false` plus a
+  // `warning`), which would otherwise look like an empty result set and be reported as the vague
+  // "no renderable content". Throwing here makes the chain log name the real cause. The throw
+  // travels through provider.search() into executeSearch()'s catch, i.e. it is a normal fallback.
+  if (data && data.success === false) {
+    const detail = typeof data.warning === 'string' && data.warning.trim()
+      ? data.warning.trim()
+      : 'request rejected'
+    throw new Error('Firecrawl rejected the search: ' + detail.slice(0, 300))
+  }
+  /** @type {SearchSource[]} */
   const sources = []
   const list = Array.isArray(data && data.data)
     ? data.data
@@ -591,12 +728,16 @@ export function normalizeFirecrawlResponse(data) {
   for (const r of list) {
     const url = r && r.url
     if (!url) continue
+    /** @type {SearchSource} */
     const source = { url, title: (r && r.title) || hostOf(url) || 'Untitled' }
-    const snippet = r && (r.description || r.snippet || r.markdown)
+    // Firecrawl v2 also returns the scraped page in `markdown`; a whole document must never
+    // become a snippet, so only its bounded collapsed prefix can stand in.
+    const snippet = boundedSnippet(r && (r.description || r.snippet), r && r.markdown)
     if (snippet) source.snippet = snippet
     sources.push(source)
   }
   const requestId = data && data.id
+  /** @type {SearchResponse} */
   const response = { provider: 'firecrawl', sources, authMode: 'api_key' }
   if (requestId) response.requestId = requestId
   return response
@@ -625,6 +766,7 @@ export function buildJinaRequest(params, key) {
   const url = buildUrlWithQuery(`${JINA_URL}/${encodeURIComponent(query)}`, {
     count: String(clampNumResults(params && (params.maxResults ?? params.limit), 5, 20)),
   })
+  /** @type {Record<string, string>} */
   const headers = {
     Accept: 'application/json',
     Authorization: `Bearer ${key}`,
@@ -641,14 +783,18 @@ export function buildJinaRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeJinaResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   const list = Array.isArray(data) ? data : data && Array.isArray(data.data) ? data.data : []
   for (const r of list) {
     const url = r && r.url
     if (!url) continue
+    /** @type {SearchSource} */
     const source = { url, title: (r && r.title) || hostOf(url) || 'Untitled' }
-    const snippet = r && (r.description || r.content)
-    if (snippet) source.snippet = snippet.trim()
+    // `X-Respond-With: no-content` should keep Jina from sending page bodies; cap the fallback
+    // anyway, in case the instance ignores that header.
+    const snippet = boundedSnippet(r && r.description, r && r.content)
+    if (snippet) source.snippet = snippet
     sources.push(source)
   }
   return { provider: 'jina', sources, authMode: 'api_key' }
@@ -667,6 +813,7 @@ export const KAGI_URL = 'https://kagi.com/api/v1/search'
  * @returns {ProviderRequest}
  */
 export function buildKagiRequest(params, key) {
+  /** @type {Record<string, unknown>} */
   const body = {
     query: (params && params.query) || '',
     workflow: 'search',
@@ -691,13 +838,19 @@ export function buildKagiRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeKagiResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   const buckets = data && data.data && typeof data.data === 'object' ? data.data : {}
+  /**
+   * @param {any[]|undefined} items
+   * @param {string} [tag]
+   */
   const collect = (items, tag) => {
     if (!Array.isArray(items)) return
     for (const item of items) {
       const url = item && (item.url || item.href || item.link)
       if (!url) continue
+      /** @type {SearchSource} */
       const source = { url, title: (item && (item.title || item.name)) || hostOf(url) || 'Untitled' }
       const snippet = item && (item.snippet || item.description || item.summary)
       if (snippet) source.snippet = snippet
@@ -716,6 +869,7 @@ export function normalizeKagiResponse(data) {
     const da = buckets.direct_answer[0]
     answer = da && (da.snippet || da.title)
   }
+  /** @type {SearchResponse} */
   const response = { provider: 'kagi', sources, authMode: 'api_key' }
   if (answer) response.answer = answer
   if (requestId) response.requestId = requestId
@@ -728,7 +882,10 @@ export function normalizeKagiResponse(data) {
 
 export const SEARXNG_PATH = '/search'
 
-/** SearXNG recency → time_range (only day/month/year supported, week maps to month). */
+/**
+ * SearXNG recency → time_range (only day/month/year supported, week maps to month).
+ * @type {Record<string, string>}
+ */
 export const SEARXNG_RECENCY = { day: 'day', week: 'month', month: 'month', year: 'year' }
 
 /**
@@ -744,6 +901,7 @@ export function buildSearXNGRequest(params, endpoint) {
   if (base.endsWith('/search')) {
     base = base.slice(0, -'/search'.length)
   }
+  /** @type {Record<string, unknown>} */
   const queryParams = {
     q: (params && params.query) || '',
     format: 'json',
@@ -761,11 +919,13 @@ export function buildSearXNGRequest(params, endpoint) {
  * @returns {SearchResponse}
  */
 export function normalizeSearXNGResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   const results = data && Array.isArray(data.results) ? data.results : []
   for (const r of results) {
     const url = r && r.url
     if (!url) continue
+    /** @type {SearchSource} */
     const source = { url, title: (r && r.title) || hostOf(url) || 'Untitled' }
     const snippet = r && (r.content || r.snippet)
     if (snippet) source.snippet = snippet.trim()
@@ -774,6 +934,7 @@ export function normalizeSearXNGResponse(data) {
     sources.push(source)
   }
   const answer = formatSearXNGAnswers(data && data.answers)
+  /** @type {SearchResponse} */
   const response = { provider: 'searxng', sources, authMode: 'endpoint' }
   if (answer) response.answer = answer
   return response
@@ -781,7 +942,7 @@ export function normalizeSearXNGResponse(data) {
 
 /**
  * Flatten SearXNG answers (strings or structured objects) into an answer (at most 3).
- * @param {Array} [answers]
+ * @param {any[]} [answers]
  * @returns {string|undefined}
  */
 export function formatSearXNGAnswers(answers) {
@@ -803,6 +964,7 @@ export function formatSearXNGAnswers(answers) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const DUCKDUCKGO_HTML_URL = 'https://html.duckduckgo.com/html/'
+/** @type {Record<string, string>} */
 const DDG_RECENCY = { day: 'd', week: 'w', month: 'm', year: 'y' }
 
 /**
@@ -811,6 +973,7 @@ const DDG_RECENCY = { day: 'd', week: 'w', month: 'm', year: 'y' }
  * @returns {ProviderRequest}
  */
 export function buildDuckDuckGoRequest(params) {
+  /** @type {Record<string, unknown>} */
   const formParams = {
     q: (params && params.query) || '',
     kl: 'us-en',
@@ -879,9 +1042,10 @@ export function isDuckDuckGoAnomaly(html) {
 /**
  * Parse DDG HTML results page, returning unified sources.
  * @param {string} html
- * @returns {Array<{url: string, title: string, snippet?: string}>}
+ * @returns {SearchSource[]}
  */
 export function parseDuckDuckGoHtml(html) {
+  /** @type {SearchSource[]} */
   const sources = []
   const text = String(html || '')
   const blockRe =
@@ -897,6 +1061,7 @@ export function parseDuckDuckGoHtml(html) {
     const titleText = decodeDuckDuckGoHtml(title[2])
     if (!titleText) continue
     const snip = snippetRe.exec(block)
+    /** @type {SearchSource} */
     const source = { url, title: titleText }
     if (snip) {
       const snippetText = decodeDuckDuckGoHtml(snip[1])

@@ -26,6 +26,8 @@ import {
   normalizeBraveResponse,
   buildExaRequest,
   normalizeExaResponse,
+  capSnippets,
+  capAnswer,
   buildFirecrawlRequest,
   normalizeFirecrawlResponse,
   buildJinaRequest,
@@ -157,6 +159,11 @@ test('buildTavilyBody: basic body', () => {
   assert.equal(b.topic, 'general')
   assert.equal(b.include_answer, true)
   assert.equal(b.max_results, 10)
+  // Tavily's `content` is up to three chunks (each <=500 chars) joined by a ` [...] ` separator
+  // and defaults to three of them (~1.2 kB, often site chrome); one chunk is the most relevant
+  // passage, and `published_date` only arrives when requested.
+  assert.equal(b.chunks_per_source, 1)
+  assert.equal(b.include_published_date, true)
 })
 
 test('buildTavilyBody: site maps to include_domains', () => {
@@ -483,6 +490,19 @@ test('normalizeFirecrawlResponse: handles both data array and data.web shapes', 
   assert.equal(r2.sources[0].url, 'https://b.com')
 })
 
+test('normalizeFirecrawlResponse: the scraped page never becomes the snippet', () => {
+  const page = '# Title\n\n' + 'word '.repeat(2000) // ~10k chars, like a real scraped page
+  const capped = normalizeFirecrawlResponse({ data: [{ url: 'https://c.com', title: 'C', markdown: page }] })
+  assert.equal(capped.sources[0].snippet.length, 150)
+  assert.ok(!capped.sources[0].snippet.includes('\n'), 'markdown whitespace is collapsed')
+  // A short field always wins over the page body.
+  const short = normalizeFirecrawlResponse({ data: [{ url: 'https://d.com', description: 'short', markdown: page }] })
+  assert.equal(short.sources[0].snippet, 'short')
+  // Nothing to show → no snippet field at all.
+  const empty = normalizeFirecrawlResponse({ data: [{ url: 'https://e.com' }] })
+  assert.equal('snippet' in empty.sources[0], false)
+})
+
 // ─── Jina ───
 test('buildJinaRequest: single site → X-Site header, query strips site:; limit passed through', () => {
   const req = buildJinaRequest({ query: 'ai site:github.com', limit: 3 }, 'jina-k')
@@ -508,6 +528,75 @@ test('normalizeJinaResponse: array or { code, data } shapes', () => {
   assert.equal(r1.sources.length, 1)
   const r2 = normalizeJinaResponse({ code: 200, data: [{ url: 'https://b.com', title: 'B' }] })
   assert.equal(r2.sources[0].url, 'https://b.com')
+})
+
+test('normalizeJinaResponse: a page body is capped, a description wins', () => {
+  const page = 'body '.repeat(3000)
+  const capped = normalizeJinaResponse([{ url: 'https://c.com', title: 'C', content: page }])
+  assert.equal(capped.sources[0].snippet.length, 150)
+  const short = normalizeJinaResponse([{ url: 'https://d.com', title: 'D', description: 'd', content: page }])
+  assert.equal(short.sources[0].snippet, 'd')
+})
+
+test('normalizeExaResponse: summary wins, a text body falls back through the same cap', () => {
+  const page = 'text '.repeat(2000)
+  const capped = normalizeExaResponse({ results: [{ url: 'https://c.com', title: 'C', text: page }] })
+  assert.equal(capped.sources[0].snippet.length, 150)
+  const short = normalizeExaResponse({ results: [{ url: 'https://d.com', title: 'D', summary: 's', text: page }] })
+  assert.equal(short.sources[0].snippet, 's')
+})
+
+test('capSnippets: every snippet obeys the native 150-character ceiling', () => {
+  const long = 'x'.repeat(1205)
+  const capped = capSnippets({
+    provider: 'tavily',
+    authMode: 'api_key',
+    sources: [
+      { url: 'https://a.com', snippet: long },
+      { url: 'https://b.com', snippet: 'short' },
+      { url: 'https://c.com' },
+    ],
+  })
+  assert.equal(capped.sources[0].snippet.length, 150)
+  assert.ok(capped.sources[0].snippet.endsWith('\u2026'), 'a cut snippet is marked')
+  assert.equal(capped.sources[1].snippet, 'short')
+  assert.equal('snippet' in capped.sources[2], false)
+  assert.equal(capped.authMode, 'api_key')
+  // A response without sources passes through untouched.
+  assert.deepEqual(capSnippets({ provider: 'x', sources: [], authMode: 'none' }).sources, [])
+})
+
+test('normalizeFirecrawlResponse: an in-body failure is named, not swallowed as empty', () => {
+  // Firecrawl answers HTTP 200 with success:false + warning; without this the chain log would
+  // only say "no renderable content" and the cause would be invisible.
+  assert.throws(() => normalizeFirecrawlResponse({ success: false, warning: 'rate limit exceeded' }), /rate limit exceeded/)
+  assert.throws(() => normalizeFirecrawlResponse({ success: false }), /Firecrawl rejected the search/)
+  const healthy = normalizeFirecrawlResponse({ success: true, data: [{ url: 'https://a.com', title: 'A' }] })
+  assert.equal(healthy.sources.length, 1)
+})
+
+test('capSnippets: page markdown is cleaned into a snippet-shaped line', () => {
+  // Real Tavily snippet for a Chinese query, before cleaning.
+  const raw = '树莓派实验室\n\n# 树莓派介绍以及FAQ\n\n### 一、树莓派简介\n\n树莓派是什么？\n树莓派是尺寸仅有信用卡大小的一个小型电脑。'
+  const cleaned = capSnippets({ provider: 'tavily', authMode: 'api_key', sources: [{ url: 'https://a.com', snippet: raw }] })
+  assert.equal(cleaned.sources[0].snippet, '树莓派实验室 树莓派介绍以及FAQ 一、树莓派简介 树莓派是什么？ 树莓派是尺寸仅有信用卡大小的一个小型电脑。')
+  assert.ok(!cleaned.sources[0].snippet.includes('#'), 'heading markers are stripped')
+  assert.ok(!cleaned.sources[0].snippet.includes('\n'), 'hard wraps are collapsed')
+  // `C#` must survive: a heading marker is only stripped at a line start or after whitespace.
+  const sharp = capSnippets({ provider: 'tavily', authMode: 'api_key', sources: [{ url: 'https://b.com', snippet: '用 C# 和 F# 写代码' }] })
+  assert.equal(sharp.sources[0].snippet, '用 C# 和 F# 写代码')
+  // Tavily's multi-chunk join separator is not content.
+  const joined = capSnippets({ provider: 'tavily', authMode: 'api_key', sources: [{ url: 'https://c.com', snippet: '第一块内容 [...] 第二块内容' }] })
+  assert.equal(joined.sources[0].snippet, '第一块内容 第二块内容')
+})
+
+test('capAnswer: the provider answer is bounded, markdown structure survives', () => {
+  const long = '### A\n\n' + 'x'.repeat(600) + '\n\n### B\n\n尾'
+  const capped = capAnswer(long)
+  assert.equal(capped.length, 400)
+  assert.ok(capped.endsWith('\u2026'), 'a cut answer is marked')
+  assert.ok(capped.startsWith('### A\n\n'), 'answer markdown is not flattened')
+  assert.equal(capAnswer('short'), 'short')
 })
 
 // ─── Kagi ───
