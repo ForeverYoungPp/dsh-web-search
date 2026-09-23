@@ -262,12 +262,17 @@ export function buildTavilyBody(params) {
     query: parsed.cleaned || '',
     topic: 'general',
     include_answer: true,
-    // Tavily returns `results[].content` as a chunk of the page, and the default is THREE chunks
-    // (~1.2 kB here, often site chrome). One chunk is the most relevant passage: measured on the
-    // same query, lengths drop 1179/1333/242 -> 384/490/482 and the text becomes a real paragraph
-    // instead of navigation. Nothing is lost downstream either, because snippets are capped at
-    // SNIPPET_MAX before they reach the card or the model.
+    // Tavily returns `results[].content` as up to three "chunks" (each <=500 characters, joined
+    // as `<chunk 1> [...] <chunk 2> [...] <chunk 3>` per the API reference), which is why the
+    // default answer looked like page chrome: measured on one query, default -> 1179/1333/242
+    // characters and result[1] opened with a navigation menu, while chunks_per_source: 1 ->
+    // 384/490/482 and result[1] opened with the article's own sentence. Nothing is lost
+    // downstream: snippets are cleaned and capped at SNIPPET_MAX before they reach the card.
     chunks_per_source: 1,
+    // `published_date` is only returned when asked for (beta, default false). The native
+    // provider's `page_age` arrives by default, so without this a Tavily result carries no date
+    // at all - measured: null for some sources, "Mon, 07 Jul 2025 00:00:00 GMT" for others.
+    include_published_date: true,
     max_results: limit,
   }
   if (params && params.recency) {
@@ -402,6 +407,8 @@ function boundedSnippet(short, long) {
 function cleanSnippet(text) {
   return String(text == null ? '' : text)
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    // Tavily joins several chunks as `<chunk 1> [...] <chunk 2>`; the separator is not content.
+    .replace(/\s*\[\.{3}\]\s*/g, ' ')
     .replace(/^[ \t]*#{1,6}[ \t]*/gm, '')
     .replace(/\s#{1,6}\s+/g, ' ')
     .replace(/\s+/g, ' ')

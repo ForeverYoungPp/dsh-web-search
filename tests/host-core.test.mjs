@@ -159,9 +159,11 @@ test('buildTavilyBody: basic body', () => {
   assert.equal(b.topic, 'general')
   assert.equal(b.include_answer, true)
   assert.equal(b.max_results, 10)
-  // Tavily's `content` is a page chunk and defaults to three of them (~1.2 kB, often site
-  // chrome); one chunk is the most relevant passage.
+  // Tavily's `content` is up to three chunks (each <=500 chars) joined by a ` [...] ` separator
+  // and defaults to three of them (~1.2 kB, often site chrome); one chunk is the most relevant
+  // passage, and `published_date` only arrives when requested.
   assert.equal(b.chunks_per_source, 1)
+  assert.equal(b.include_published_date, true)
 })
 
 test('buildTavilyBody: site maps to include_domains', () => {
@@ -574,6 +576,9 @@ test('capSnippets: page markdown is cleaned into a snippet-shaped line', () => {
   // `C#` must survive: a heading marker is only stripped at a line start or after whitespace.
   const sharp = capSnippets({ provider: 'tavily', authMode: 'api_key', sources: [{ url: 'https://b.com', snippet: '用 C# 和 F# 写代码' }] })
   assert.equal(sharp.sources[0].snippet, '用 C# 和 F# 写代码')
+  // Tavily's multi-chunk join separator is not content.
+  const joined = capSnippets({ provider: 'tavily', authMode: 'api_key', sources: [{ url: 'https://c.com', snippet: '第一块内容 [...] 第二块内容' }] })
+  assert.equal(joined.sources[0].snippet, '第一块内容 第二块内容')
 })
 
 test('capAnswer: the provider answer is bounded, markdown structure survives', () => {
