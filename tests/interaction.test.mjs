@@ -1,13 +1,26 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import {
-  initialState,
-  deriveViewState,
-  reducer,
-  reorderProviders,
-  MASK,
-} from '../src/interaction.js'
+// The shipped copy of this state machine lives in the browser bundle (the host
+// loads src/client/bundle.js; a local module could not be required from it), so
+// these tests load the bundle exactly the way the browser does and reach the pure
+// functions through its `__internals` handle. A `vm` realm is deliberately NOT
+// used here: objects created inside it would carry a foreign Object.prototype and
+// every deepStrictEqual below would fail on the prototype check.
+let captured = null
+globalThis.window = {
+  __ModuleLoader__: {
+    load: (registration) => {
+      captured = registration
+    },
+  },
+}
+await import('../src/client/bundle.js')
+const bundle = captured.factory((spec) => {
+  if (spec === 'react') return {}
+  throw new Error('unexpected require: ' + spec)
+})
+const { initialState, deriveViewState, reducer, reorderProviders, MASK } = bundle.__internals
 
 function provider(configured) {
   return { keyStatus: { configured } }

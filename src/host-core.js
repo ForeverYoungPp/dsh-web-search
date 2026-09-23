@@ -249,6 +249,8 @@ export function parseQuery(query) {
  */
 export function buildTavilyBody(params) {
   const parsed = parseQuery(params && params.query)
+  // Not clampNumResults(): limit:0 must yield 1 result here, while clampNumResults maps
+  // any non-positive/invalid value to its default (10). See tests/host-core.test.mjs:175.
   const rawLimit = params && (params.maxResults ?? params.limit)
   const limit = rawLimit === undefined
     ? 10

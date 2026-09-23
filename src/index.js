@@ -64,14 +64,6 @@ export function apply(ctx) {
     return recordEndpoint(await readCredentialRecord(id))
   }
 
-  async function apiKeyAvailable(id) {
-    return (await readApiKey(id)) !== undefined
-  }
-
-  async function endpointAvailable(id) {
-    return (await readEndpoint(id)) !== undefined
-  }
-
   async function loadConfig() {
     const creds = getCredentials()
     if (!creds) return Object.assign({}, DEFAULT_CONFIG)
@@ -144,8 +136,8 @@ export function apply(ctx) {
       label: spec.label,
       available: async function () {
         if (spec.kind === 'none') return true
-        if (spec.kind === 'endpoint') return await endpointAvailable(spec.id)
-        return await apiKeyAvailable(spec.id)
+        if (spec.kind === 'endpoint') return (await readEndpoint(spec.id)) !== undefined
+        return (await readApiKey(spec.id)) !== undefined
       },
       search: async function (params) {
         let cred = null
@@ -200,12 +192,7 @@ export function apply(ctx) {
 
   async function resolveCandidates() {
     const config = await ensureConfig()
-    const order = resolveProviderOrder(config.order, Object.keys(PROVIDER_SPECS), config.exclude)
-    const candidates = []
-    for (let i = 0; i < order.length; i++) {
-      candidates.push({ id: order[i] })
-    }
-    return candidates
+    return resolveProviderOrder(config.order, Object.keys(PROVIDER_SPECS), config.exclude)
   }
 
   function hasRenderableContent(response) {
@@ -216,18 +203,18 @@ export function apply(ctx) {
 
   async function executeSearch(params, execOpts) {
     const signal = execOpts && execOpts.signal
-    const candidates = await resolveCandidates()
-    const failures = []
+    const order = await resolveCandidates()
     let lastProvider = null
+    let lastError = null
     const effectiveMax = params.maxResults ?? params.num_search_results ?? params.limit ?? 5
-    for (let i = 0; i < candidates.length; i++) {
-      const cand = candidates[i]
-      const provider = getProvider(cand.id)
+    for (let i = 0; i < order.length; i++) {
+      const id = order[i]
+      const provider = getProvider(id)
       if (!provider) continue
       try {
         const available = await provider.available()
         if (!available) {
-          failures.push({ id: cand.id, error: 'unavailable' })
+          lastError = 'unavailable'
           continue
         }
         lastProvider = provider
@@ -248,18 +235,17 @@ export function apply(ctx) {
             provider: lastProvider && lastProvider.label,
           }
         }
-        failures.push({ id: cand.id, error: 'no renderable content' })
+        lastError = 'no renderable content'
       } catch (e) {
         if (signal && signal.aborted) throw e
-        failures.push({ id: cand.id, error: e.message || String(e) })
+        lastError = e.message || String(e)
       }
     }
-    if (failures.length === 0) {
+    if (!lastError) {
       return { content: 'Error: No web search provider configured.', sources: [], truncated: false }
     }
-    const lastErr = failures[failures.length - 1]
     return {
-      content: 'Error: ' + (lastProvider ? lastProvider.label + ' ' : '') + (lastErr.error || 'search failed'),
+      content: 'Error: ' + (lastProvider ? lastProvider.label + ' ' : '') + lastError,
       sources: [],
       truncated: false,
     }

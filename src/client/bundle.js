@@ -13,6 +13,12 @@
  * Component identity note (same fix as the dynamic plugin): components are
  * defined once in the apply scope, never inside the slot render callback, so
  * React does not remount the subtree on every render and lose reducer state.
+ *
+ * This bundle is the single copy of the ProviderCard state machine
+ * (reducer / deriveView / reorderProviders). It cannot `require` local files —
+ * only `react` is on the module table — so the pure functions live here rather
+ * than in a shared module, and `__internals` exposes them to
+ * tests/interaction.test.mjs, which exercises exactly the code users load.
  */
 
 window.__ModuleLoader__.load({
@@ -82,7 +88,7 @@ window.__ModuleLoader__.load({
     };
 
     // ================= Pure reducer (consistent with the dynamic version) =================
-    var MASK = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+    var MASK = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
     var interactionInitial = { keyValue: '', saving: false, clearing: false, testing: false, lastResult: null, testResult: null };
 
     function interactionReducer(state, action) {
@@ -124,6 +130,10 @@ window.__ModuleLoader__.load({
       var canSave = !configured && idle && state.keyValue.trim().length > 0;
       var canClear = configured && idle;
       var canTest = configured && idle;
+      var statusText = configured
+        ? (kind === 'endpoint' ? 'Configured' : 'Active')
+        : (kind === 'endpoint' ? 'Inactive (no endpoint)' : 'Inactive (no key)');
+      var opacity = configured ? '1' : '0.55';
       var placeholder = configured
         ? ''
         : kind === 'endpoint'
@@ -138,6 +148,8 @@ window.__ModuleLoader__.load({
         canTest: canTest,
         testing: state.testing,
         testResult: state.testResult,
+        statusText: statusText,
+        opacity: opacity,
         displayValue: displayValue,
         inputDisabled: inputDisabled,
         placeholder: placeholder,
@@ -155,7 +167,7 @@ window.__ModuleLoader__.load({
     }
 
     // ================= Component factory (created once in the apply scope) =================
-    function createComponents(ctx, websearch) {
+    function createComponents(websearch) {
       function ProviderCard(props) {
         var p = props.p;
         var onSave = props.onSave;
@@ -210,10 +222,6 @@ window.__ModuleLoader__.load({
           else testFeedback = React.createElement('span', { style: { fontSize: '12px', color: '#dc2626' } }, testResult.message || 'Test failed');
         }
 
-        var statusText = view.configured
-          ? (view.kind === 'endpoint' ? 'Configured' : 'Active')
-          : (view.kind === 'endpoint' ? 'Inactive (no endpoint)' : 'Inactive (no key)');
-
         // DuckDuckGo: keyless provider, display only, no input
         if (view.kind === 'none') {
           return React.createElement('div', { style: { opacity: '1' } },
@@ -231,12 +239,12 @@ window.__ModuleLoader__.load({
         var btnStyle = { padding: '6px 0', width: '76px', textAlign: 'center', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', flexShrink: '0' };
         var clearBtnStyle = { padding: '6px 0', width: '64px', textAlign: 'center', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', flexShrink: '0' };
 
-        return React.createElement('div', { style: { opacity: view.configured ? '1' : '0.55' } },
+        return React.createElement('div', { style: { opacity: view.opacity } },
           React.createElement('div', { style: { border: '1px solid #ddd', borderRadius: '8px', padding: '16px', background: '#fff' } },
             React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '14px' } },
               React.createElement('span', { style: { width: '10px', height: '10px', borderRadius: '50%', display: 'inline-block', marginRight: '10px', background: view.configured ? '#22c55e' : '#d1d5db' } }),
               React.createElement('strong', { style: { fontSize: '15px' } }, p.label || p.id),
-              React.createElement('span', { style: { fontSize: '12px', color: '#888', marginLeft: '10px' } }, statusText),
+              React.createElement('span', { style: { fontSize: '12px', color: '#888', marginLeft: '10px' } }, view.statusText),
             ),
             React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
               React.createElement('input', {
@@ -404,7 +412,7 @@ window.__ModuleLoader__.load({
       const websearch = ctx.get('remote.websearch');
 
       // Components defined once in the apply scope (stable function identity, avoids settings page remounting and losing state)
-      var components = createComponents(ctx, websearch);
+      var components = createComponents(websearch);
 
       var slots = ctx.get('slots');
       if (!slots) return;
@@ -424,6 +432,16 @@ window.__ModuleLoader__.load({
       name: '@deepseek-ai/dsh-web-search',
       inject: ['slots', 'remote'],
       apply: apply,
+      // Test-only handle on the pure state machine shipped above. The browser half
+      // cannot `require` local files, so this is the only way tests can reach the
+      // copy that users actually load (see tests/interaction.test.mjs).
+      __internals: {
+        MASK: MASK,
+        initialState: interactionInitial,
+        deriveViewState: deriveView,
+        reducer: interactionReducer,
+        reorderProviders: reorderProviders,
+      },
     };
 
     return module.exports;
