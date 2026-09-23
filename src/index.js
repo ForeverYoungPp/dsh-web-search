@@ -206,7 +206,10 @@ export function apply(ctx) {
     const order = await resolveCandidates()
     let lastProvider = null
     let lastError = null
-    const effectiveMax = params.maxResults ?? params.num_search_results ?? params.limit ?? 5
+    // Requested result count. When the caller omits it, leave it undefined so each provider
+    // applies its own default — the native path works the same way (the seam asks for
+    // `maxResults`, the backend owns how many it returns).
+    const effectiveMax = params.maxResults ?? params.num_search_results ?? params.limit
     for (let i = 0; i < order.length; i++) {
       const id = order[i]
       const provider = getProvider(id)
@@ -227,12 +230,16 @@ export function apply(ctx) {
           signal: signal,
         })
         if (hasRenderableContent(response)) {
-          const sources = response.sources || []
+          // Hand the seam the provider's FULL source list and leave `truncated` false, exactly
+          // like the native deepseek-official provider does. The seam's capSources() slices to
+          // request.maxResults AND sets truncated: true, which is what surfaces the
+          // "sources truncated" notice to both the user and the model. Pre-slicing here (as
+          // this used to) kept the seam from ever seeing length > maxResults, so a capped list
+          // was presented as complete.
           return {
             ...(response.answer ? { content: response.answer } : {}),
-            sources: sources.length > effectiveMax ? sources.slice(0, effectiveMax) : sources,
+            sources: response.sources || [],
             truncated: false,
-            provider: lastProvider && lastProvider.label,
           }
         }
         lastError = 'no renderable content'
@@ -267,7 +274,7 @@ export function apply(ctx) {
           try {
             const info = await creds.describeRecord(CREDENTIAL_KEYS[id])
             if (info) keyStatus = { configured: !!info.configured, source: 'plugin', writable: !!info.writable }
-          } catch (e) {
+          } catch {
             /* ignore */
           }
         }
@@ -399,7 +406,7 @@ export function apply(ctx) {
                 const fallback = await native.search(request, signal)
                 if (fallback && Array.isArray(fallback.sources)) return fallback
               }
-            } catch (e) {
+            } catch {
               /* native also failed, return our own error */
             }
           }
@@ -409,7 +416,7 @@ export function apply(ctx) {
       if (disposeProvider) ctx.effect(function () { return disposeProvider })
       // Read the runtime searchProviderId (WebRuntime's private field, at runtime it is a real property)
       let currentId = ''
-      try { currentId = web.searchProviderId } catch (e) { /* ignore */ }
+      try { currentId = web.searchProviderId } catch { /* ignore */ }
       console.log('[dsh-web-search] native web_search provider registered (id=dsh-web-search); searchProviderId=' + JSON.stringify(currentId) + ' — if searchProviderId is not dsh-web-search, native web_search will not use this plugin (will be AMBIGUOUS or fall back to deepseek)')
     }
   } catch (e) {
