@@ -211,6 +211,8 @@ export function apply(ctx) {
     let lastError = null
     /** Attempt chain for the host log: `id: reason` per provider tried or skipped. @type {string[]} */
     const attempts = []
+    /** Wall-clock stamp so a burst pattern (and a provider's per-minute rate limit) is visible. */
+    const stamp = new Date().toTimeString().slice(0, 8)
     // Requested result count. When the caller omits it, leave it undefined so each provider
     // applies its own default — the native path works the same way (the seam asks for
     // `maxResults`, the backend owns how many it returns).
@@ -253,7 +255,7 @@ export function apply(ctx) {
           // those plus `answer`, and the client card model reads only those. So the chain is
           // reported here, on the host log, where a fallback being debugged can be audited: every
           // provider that was skipped or failed, then the one that served.
-          console.log('[dsh-web-search] ' + attempts.concat(id + ': served').join(' \u2192 ') +
+          console.log('[' + stamp + '] [dsh-web-search] ' + attempts.concat(id + ': served').join(' \u2192 ') +
             ' (' + (capped.sources ? capped.sources.length : 0) + ' sources, ' + (Date.now() - startedAt) + 'ms)')
           return {
             ...(answer ? { content: answer } : {}),
@@ -269,7 +271,7 @@ export function apply(ctx) {
         attempts.push(id + ': ' + String(lastError).slice(0, 120))
       }
     }
-    console.log('[dsh-web-search] ' + attempts.concat('all providers failed').join(' \u2192 '))
+    console.log('[' + stamp + '] [dsh-web-search] ' + attempts.concat('all providers failed').join(' \u2192 '))
     if (!lastError) {
       return { content: 'Error: No web search provider configured.', sources: [], truncated: false }
     }
