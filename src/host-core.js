@@ -262,6 +262,12 @@ export function buildTavilyBody(params) {
     query: parsed.cleaned || '',
     topic: 'general',
     include_answer: true,
+    // Tavily returns `results[].content` as a chunk of the page, and the default is THREE chunks
+    // (~1.2 kB here, often site chrome). One chunk is the most relevant passage: measured on the
+    // same query, lengths drop 1179/1333/242 -> 384/490/482 and the text becomes a real paragraph
+    // instead of navigation. Nothing is lost downstream either, because snippets are capped at
+    // SNIPPET_MAX before they reach the card or the model.
+    chunks_per_source: 1,
     max_results: limit,
   }
   if (params && params.recency) {
@@ -362,6 +368,14 @@ export function hostOf(site) {
 const SNIPPET_MAX = 150
 
 /**
+ * Ceiling for the provider's own answer/summary when the tool returns one. Native
+ * `deepseek-official` never sends an answer, but Tavily answers a multi-query search with a
+ * small report (~1 kB, one `###` section per query); this keeps a summary without handing the
+ * card a wall of Markdown. Set to 0 to drop the answer entirely.
+ */
+const ANSWER_MAX = 400
+
+/**
  * Build a SERP-sized snippet: the short field when it has content, otherwise a bounded,
  * whitespace-collapsed prefix of the long one. Some providers return whole documents —
  * Firecrawl's scraped `markdown`, Jina's `content`, Exa's `text` — and a full page must never
@@ -377,13 +391,44 @@ function boundedSnippet(short, long) {
 }
 
 /**
- * Trim one snippet to {@link SNIPPET_MAX}, marking the cut with an ellipsis.
- * @param {string} text
+ * Turn a provider's page text into something that reads like a search-result snippet: strip
+ * Markdown image syntax and heading markers (Tavily returns raw page chunks, so snippets arrive
+ * as `# 标题 ### 小节` blocks), collapse every run of whitespace to one space, and drop leading
+ * punctuation left over from the page chrome (`|`, `-`, `:`, `、`). `C#` and `F#` survive,
+ * because a heading marker is only stripped at a line start or after whitespace.
+ * @param {unknown} text
+ * @returns {string}
+ */
+function cleanSnippet(text) {
+  return String(text == null ? '' : text)
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/^[ \t]*#{1,6}[ \t]*/gm, '')
+    .replace(/\s#{1,6}\s+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s|\-\u2013\u2014\u00b7\u2022*,，.。/、:：)]+/, '')
+    .trim()
+}
+
+/**
+ * Clean one snippet and hold it to {@link SNIPPET_MAX}, marking a cut with an ellipsis.
+ * @param {unknown} text
  * @returns {string}
  */
 function capSnippet(text) {
-  const s = typeof text === 'string' ? text : ''
+  const s = cleanSnippet(text)
   return s.length > SNIPPET_MAX ? s.slice(0, SNIPPET_MAX - 1).trimEnd() + '\u2026' : s
+}
+
+/**
+ * Bound the provider's answer/summary. Whitespace and Markdown are preserved here (the card
+ * renders it as Markdown), only the length is cut, and `ANSWER_MAX = 0` removes it.
+ * @param {string} text
+ * @returns {string}
+ */
+export function capAnswer(text) {
+  if (ANSWER_MAX <= 0) return ''
+  const s = typeof text === 'string' ? text.trim() : ''
+  return s.length > ANSWER_MAX ? s.slice(0, ANSWER_MAX - 1).trimEnd() + '\u2026' : s
 }
 
 /**

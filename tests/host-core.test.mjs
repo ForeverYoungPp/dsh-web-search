@@ -27,6 +27,7 @@ import {
   buildExaRequest,
   normalizeExaResponse,
   capSnippets,
+  capAnswer,
   buildFirecrawlRequest,
   normalizeFirecrawlResponse,
   buildJinaRequest,
@@ -158,6 +159,9 @@ test('buildTavilyBody: basic body', () => {
   assert.equal(b.topic, 'general')
   assert.equal(b.include_answer, true)
   assert.equal(b.max_results, 10)
+  // Tavily's `content` is a page chunk and defaults to three of them (~1.2 kB, often site
+  // chrome); one chunk is the most relevant passage.
+  assert.equal(b.chunks_per_source, 1)
 })
 
 test('buildTavilyBody: site maps to include_domains', () => {
@@ -541,7 +545,6 @@ test('normalizeExaResponse: summary wins, a text body falls back through the sam
 })
 
 test('capSnippets: every snippet obeys the native 150-character ceiling', () => {
-  // Measured: Tavily returns ~1.2 kB of page text per result, the native excerpt is <=150.
   const long = 'x'.repeat(1205)
   const capped = capSnippets({
     provider: 'tavily',
@@ -559,6 +562,27 @@ test('capSnippets: every snippet obeys the native 150-character ceiling', () => 
   assert.equal(capped.authMode, 'api_key')
   // A response without sources passes through untouched.
   assert.deepEqual(capSnippets({ provider: 'x', sources: [], authMode: 'none' }).sources, [])
+})
+
+test('capSnippets: page markdown is cleaned into a snippet-shaped line', () => {
+  // Real Tavily snippet for a Chinese query, before cleaning.
+  const raw = '树莓派实验室\n\n# 树莓派介绍以及FAQ\n\n### 一、树莓派简介\n\n树莓派是什么？\n树莓派是尺寸仅有信用卡大小的一个小型电脑。'
+  const cleaned = capSnippets({ provider: 'tavily', authMode: 'api_key', sources: [{ url: 'https://a.com', snippet: raw }] })
+  assert.equal(cleaned.sources[0].snippet, '树莓派实验室 树莓派介绍以及FAQ 一、树莓派简介 树莓派是什么？ 树莓派是尺寸仅有信用卡大小的一个小型电脑。')
+  assert.ok(!cleaned.sources[0].snippet.includes('#'), 'heading markers are stripped')
+  assert.ok(!cleaned.sources[0].snippet.includes('\n'), 'hard wraps are collapsed')
+  // `C#` must survive: a heading marker is only stripped at a line start or after whitespace.
+  const sharp = capSnippets({ provider: 'tavily', authMode: 'api_key', sources: [{ url: 'https://b.com', snippet: '用 C# 和 F# 写代码' }] })
+  assert.equal(sharp.sources[0].snippet, '用 C# 和 F# 写代码')
+})
+
+test('capAnswer: the provider answer is bounded, markdown structure survives', () => {
+  const long = '### A\n\n' + 'x'.repeat(600) + '\n\n### B\n\n尾'
+  const capped = capAnswer(long)
+  assert.equal(capped.length, 400)
+  assert.ok(capped.endsWith('\u2026'), 'a cut answer is marked')
+  assert.ok(capped.startsWith('### A\n\n'), 'answer markdown is not flattened')
+  assert.equal(capAnswer('short'), 'short')
 })
 
 // ─── Kagi ───
