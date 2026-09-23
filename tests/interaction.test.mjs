@@ -30,26 +30,26 @@ function provider(configured) {
 test('deriveViewState: no key configured → grayed + Inactive + editable + no mask', () => {
   const s = deriveViewState(initialState, provider(false))
   assert.equal(s.configured, false)
-  assert.equal(s.statusText, 'Inactive (no key)')
+  assert.equal(s.statusKey, 'statusInactiveNoKey')
   assert.equal(s.opacity, '0.55')
   assert.equal(s.canClear, false)
   assert.equal(s.canSave, false) // no input
   assert.equal(s.inputDisabled, false)
   assert.equal(s.displayValue, '')
-  assert.equal(s.placeholder, 'Enter API key to activate...')
+  assert.equal(s.placeholderKey, 'placeholderApiKey')
 })
 
 test('deriveViewState: key configured → grayed + masked + not editable + not Save-able', () => {
   const s = deriveViewState(initialState, provider(true))
   assert.equal(s.configured, true)
-  assert.equal(s.statusText, 'Active')
+  assert.equal(s.statusKey, 'statusActive')
   assert.equal(s.opacity, '1')
   assert.equal(s.canClear, true)
   assert.equal(s.canSave, false) // configured, cannot save
   // Key: grayed out + masked + not editable
   assert.equal(s.inputDisabled, true)
   assert.equal(s.displayValue, MASK)
-  assert.equal(s.placeholder, '')
+  assert.equal(s.placeholderKey, '')
 })
 
 test('deriveViewState: configured → no input displayed or saved (not editable)', () => {
@@ -143,7 +143,7 @@ test('CLEAR_SUCCESS: clears input + shows cleared feedback (not configured → e
   const view = deriveViewState(s, provider(false))
   assert.equal(view.inputDisabled, false)
   assert.equal(view.displayValue, '')
-  assert.equal(view.placeholder, 'Enter API key to activate...')
+  assert.equal(view.placeholderKey, 'placeholderApiKey')
 })
 
 test('CLEAR_FAIL: retains input + shows error feedback', () => {
@@ -188,8 +188,8 @@ test('Full flow: not configured input → Save → configured mask; Clear → ba
 test('deriveViewState: endpoint not configured → text input + endpoint placeholder + Inactive (no endpoint)', () => {
   const s = deriveViewState(initialState, { kind: 'endpoint', keyStatus: { configured: false } })
   assert.equal(s.inputType, 'text')
-  assert.equal(s.placeholder, 'Enter endpoint URL (e.g. https://searx.example.org)...')
-  assert.equal(s.statusText, 'Inactive (no endpoint)')
+  assert.equal(s.placeholderKey, 'placeholderEndpoint')
+  assert.equal(s.statusKey, 'statusInactiveNoEndpoint')
   assert.equal(s.configured, false)
 })
 
@@ -197,7 +197,7 @@ test('deriveViewState: endpoint configured → grayed masked + Configured', () =
   const s = deriveViewState(initialState, { kind: 'endpoint', keyStatus: { configured: true } })
   assert.equal(s.configured, true)
   assert.equal(s.inputDisabled, true)
-  assert.equal(s.statusText, 'Configured')
+  assert.equal(s.statusKey, 'statusConfigured')
   assert.equal(s.displayValue, MASK)
   assert.equal(s.canClear, true)
 })
@@ -212,8 +212,8 @@ test('deriveViewState: kind none (DDG) → apikey-style default path (current be
   const s = deriveViewState(initialState, { kind: 'none', keyStatus: { configured: false } })
   assert.equal(s.kind, 'none')
   assert.equal(s.inputType, 'password')
-  assert.equal(s.statusText, 'Inactive (no key)')
-  assert.equal(s.placeholder, 'Enter API key to activate...')
+  assert.equal(s.statusKey, 'statusInactiveNoKey')
+  assert.equal(s.placeholderKey, 'placeholderApiKey')
 })
 
 // ─── reorderProviders (drag-sort) ───

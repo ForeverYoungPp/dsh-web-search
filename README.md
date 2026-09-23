@@ -25,6 +25,7 @@ The plugin routes the harness's native `web_search` tool through its own provide
 | **Native `web_search` integration** | Patch override routes the harness's native `web_search` tool through this plugin's multi-provider fallback chain, replacing the built-in `deepseek-official` backend. Access your configured API keys and DuckDuckGo as a keyless last resort — all through the native web card UI. |
 | **In-app credential management** | API keys and SearXNG endpoints live in harness credential records, managed from a dedicated "Web Search Providers" settings page — save, clear, test, and drag-to-reorder. |
 | **Fail-loud** | When the patch is not applied, the native `web_search` reports `WEB_PROVIDER_AMBIGUOUS` rather than silently degrading. |
+| **Localized and themed** | The settings page registers `en` / `zh` dictionaries with the host `locale` service and paints everything with `--dsw-*` design tokens, so both the language and the light/dark palette follow the host. |
 | **No bundler** | The host half is plain ESM and the browser half is a hand-written factory bundle, so `npm run build` merely stages `src/` into the published `dist/` — nothing is transformed. |
 
 ## Table of Contents
@@ -121,6 +122,8 @@ The plugin registers an isolated settings section, **Web Search Providers** (id 
 - reorder the fallback chain by dragging
 
 The page talks to the host over the plugin's `websearch` Remote namespace (`list` / `setKey` / `unsetKey` / `setOrder` / `testProvider`).
+
+It follows the host in two ways: text comes from `en` / `zh` dictionaries registered with the `locale` service (sidebar label included, via a label thunk), and every colour is a design token (`var(--dsw-alias-*)`) rather than a fixed hex, so the page switches with the host's light/dark theme.
 
 ## Providers
 

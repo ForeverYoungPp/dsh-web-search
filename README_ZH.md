@@ -25,6 +25,7 @@
 | **原生 `web_search` 集成** | Patch override 将 Harness 原生 `web_search` 工具路由到本插件的多 provider 回退链，替换内置的 `deepseek-official` 后端。已配置的 API key 和 DuckDuckGo（无需 key）均可通过原生网页卡片 UI 使用。 |
 | **应用内凭据管理** | API key 与 SearXNG endpoint 存放在 harness credential records 中，在专属的「Web Search Providers」设置页管理——保存、清除、连接测试、拖拽排序。 |
 | **Fail-loud（故障显式报错）** | 未应用 patch 时，原生 `web_search` 会返回 `WEB_PROVIDER_AMBIGUOUS`，而不是静默降级。 |
+| **国际化 + 主题跟随** | 设置页向宿主 `locale` 服务注册 `en` / `zh` 字典，并全部使用 `--dsw-*` 设计变量上色，因此语言与明/暗配色都跟随宿主。 |
 | **无打包器** | host 端本就是纯 ESM、浏览器端本就是手写 factory bundle，因此 `npm run build` 只是把 `src/` 拷成发布用的 `dist/`——没有任何编译转换。 |
 
 ## 目录
@@ -121,6 +122,8 @@ dsh plugin --profile web add @deepseek-ai/dsh-web-search   # 解析 @latest
 - 拖拽调整回退链顺序
 
 设置页通过插件的 `websearch` Remote 命名空间与宿主通信（`list` / `setKey` / `unsetKey` / `setOrder` / `testProvider`）。
+
+它从两方面跟随宿主：文本来自注册到 `locale` 服务的 `en` / `zh` 字典（侧边栏标签也通过 label thunk 跟随），颜色全部使用设计变量（`var(--dsw-alias-*)`）而非写死的十六进制值，因此页面会随宿主的明/暗主题切换。
 
 ## Providers
 
