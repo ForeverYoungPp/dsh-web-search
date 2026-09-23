@@ -706,6 +706,16 @@ export function buildFirecrawlRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeFirecrawlResponse(data) {
+  // Firecrawl signals its own failures in the body (HTTP 200 with `success: false` plus a
+  // `warning`), which would otherwise look like an empty result set and be reported as the vague
+  // "no renderable content". Throwing here makes the chain log name the real cause. The throw
+  // travels through provider.search() into executeSearch()'s catch, i.e. it is a normal fallback.
+  if (data && data.success === false) {
+    const detail = typeof data.warning === 'string' && data.warning.trim()
+      ? data.warning.trim()
+      : 'request rejected'
+    throw new Error('Firecrawl rejected the search: ' + detail.slice(0, 300))
+  }
   /** @type {SearchSource[]} */
   const sources = []
   const list = Array.isArray(data && data.data)

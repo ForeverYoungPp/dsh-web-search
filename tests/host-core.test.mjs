@@ -566,6 +566,15 @@ test('capSnippets: every snippet obeys the native 150-character ceiling', () => 
   assert.deepEqual(capSnippets({ provider: 'x', sources: [], authMode: 'none' }).sources, [])
 })
 
+test('normalizeFirecrawlResponse: an in-body failure is named, not swallowed as empty', () => {
+  // Firecrawl answers HTTP 200 with success:false + warning; without this the chain log would
+  // only say "no renderable content" and the cause would be invisible.
+  assert.throws(() => normalizeFirecrawlResponse({ success: false, warning: 'rate limit exceeded' }), /rate limit exceeded/)
+  assert.throws(() => normalizeFirecrawlResponse({ success: false }), /Firecrawl rejected the search/)
+  const healthy = normalizeFirecrawlResponse({ success: true, data: [{ url: 'https://a.com', title: 'A' }] })
+  assert.equal(healthy.sources.length, 1)
+})
+
 test('capSnippets: page markdown is cleaned into a snippet-shaped line', () => {
   // Real Tavily snippet for a Chinese query, before cleaning.
   const raw = '树莓派实验室\n\n# 树莓派介绍以及FAQ\n\n### 一、树莓派简介\n\n树莓派是什么？\n树莓派是尺寸仅有信用卡大小的一个小型电脑。'
