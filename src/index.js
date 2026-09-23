@@ -209,6 +209,8 @@ export function apply(ctx) {
     const order = await resolveCandidates()
     let lastProvider = null
     let lastError = null
+    /** Attempt chain for the host log: `id: reason` per provider tried or skipped. @type {string[]} */
+    const attempts = []
     // Requested result count. When the caller omits it, leave it undefined so each provider
     // applies its own default — the native path works the same way (the seam asks for
     // `maxResults`, the backend owns how many it returns).
@@ -220,6 +222,7 @@ export function apply(ctx) {
       try {
         const available = await provider.available()
         if (!available) {
+          attempts.push(id + ': not configured')
           lastError = 'unavailable'
           continue
         }
@@ -247,9 +250,10 @@ export function apply(ctx) {
           const answer = response.answer ? capAnswer(response.answer) : ''
           // The web_search tool has no field for the serving provider: its result projection keeps
           // only content/sources/truncated, `searchMetaFromValue` builds the card meta from exactly
-          // those plus `answer`, and the client card model reads only those. So the provider is
-          // reported here, on the host log, where a chain being debugged can be audited.
-          console.log('[dsh-web-search] served by ' + (lastProvider ? lastProvider.label : 'unknown') +
+          // those plus `answer`, and the client card model reads only those. So the chain is
+          // reported here, on the host log, where a fallback being debugged can be audited: every
+          // provider that was skipped or failed, then the one that served.
+          console.log('[dsh-web-search] ' + attempts.concat(id + ': served').join(' \u2192 ') +
             ' (' + (capped.sources ? capped.sources.length : 0) + ' sources, ' + (Date.now() - startedAt) + 'ms)')
           return {
             ...(answer ? { content: answer } : {}),
@@ -258,11 +262,14 @@ export function apply(ctx) {
           }
         }
         lastError = 'no renderable content'
+        attempts.push(id + ': ' + lastError)
       } catch (e) {
         if (signal && signal.aborted) throw e
         lastError = e.message || String(e)
+        attempts.push(id + ': ' + String(lastError).slice(0, 120))
       }
     }
+    console.log('[dsh-web-search] ' + attempts.concat('all providers failed').join(' \u2192 '))
     if (!lastError) {
       return { content: 'Error: No web search provider configured.', sources: [], truncated: false }
     }
