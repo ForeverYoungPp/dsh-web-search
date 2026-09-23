@@ -5,202 +5,179 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@ian_p/dsh-web-search"><img src="https://img.shields.io/npm/v/@ian_p/dsh-web-search?style=flat-square&amp;color=5B4CF0" alt="npm version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B7285?style=flat-square" alt="MIT license"></a>
-  <a href="./patch.web.yml"><img src="https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square" alt="DSH Web and Headless"></a>
+  <img src="https://img.shields.io/badge/DSH-0.1.5--rc.3-5B4CF0?style=flat-square" alt="DSH host version">
   <img src="https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-339933?style=flat-square&amp;logo=node.js" alt="Node version">
 </p>
 
 ## One fallback chain. Eight providers.
 
-`dsh-web-search` is a static Cordis plugin for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) that adds a configurable, multi-provider web search back-end. Each query walks the configured provider order and falls back to the next on failure or empty results. DuckDuckGo needs no API key and acts as the final fallback, so the chain always has a working link.
+`@ian_p/dsh-web-search` is a Cordis plugin for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) that replaces the native `web_search` back end with a configurable, multi-provider chain. Each query walks the configured provider order and falls back to the next on failure or empty results; DuckDuckGo needs no key and closes the chain.
 
-The plugin routes the harness's native `web_search` tool through its own provider chain — replacing the built-in `deepseek-official` backend — so the built-in web card rendering delivers multi-provider fallback, configured API keys, and DuckDuckGo as a keyless last resort.
+The browser half adds a dedicated **Search providers** settings page for keys, connection tests and drag-to-reorder.
 
-> **Design reference:** this multi-provider web-search approach is adapted from Oh My Pi (OMP).
-
-## Why dsh-web-search?
+> **Design reference:** the multi-provider approach is adapted from Oh My Pi (OMP).
 
 | Capability | What it changes |
-|---|---|
+| --- | --- |
 | **8 providers, one chain** | Tavily, Brave, Exa, Firecrawl, Jina, Kagi, SearXNG, DuckDuckGo — any order, any subset. |
-| **Native `web_search` integration** | Patch override routes the harness's native `web_search` tool through this plugin's multi-provider fallback chain, replacing the built-in `deepseek-official` backend. Access your configured API keys and DuckDuckGo as a keyless last resort — all through the native web card UI. |
-| **In-app credential management** | API keys and SearXNG endpoints live in harness credential records, managed from a dedicated "Search providers" settings page — save, clear, test, and drag-to-reorder. |
-| **Fail-loud** | When the patch is not applied, the native `web_search` reports `WEB_PROVIDER_AMBIGUOUS` rather than silently degrading. |
-| **Localized and themed** | The settings page registers `en` / `zh` dictionaries with the host `locale` service and paints everything with `--dsw-*` design tokens, so both the language and the light/dark palette follow the host. |
-| **No bundler** | The host half is plain ESM and the browser half is a hand-written factory bundle, so `npm run build` merely stages `src/` into the published `dist/` — nothing is transformed. |
-
-## Table of Contents
-
-- [Requirements](#requirements)
-- [Installation / Loading](#installation--loading)
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [Providers](#providers)
-- [Architecture / Project Layout](#architecture--project-layout)
-- [Development / Testing](#development--testing)
-- [License](#license)
+| **Native `web_search` integration** | The patch override routes the harness's own `web_search` tool through this chain. |
+| **Fail-loud** | With the patch not applied the native tool reports `WEB_PROVIDER_AMBIGUOUS` instead of silently degrading. |
+| **Host-native settings page** | Localized (en/zh) through the host `locale` service and styled with the host's own control contract (`--dsw-*` design tokens), so it follows the host language and light/dark theme. |
+| **Auditable fallback** | One host-log line per search names every provider that was skipped or failed, then the one that served. |
 
 ## Requirements
 
 - **Node.js** `^22.19` or `>=24`
-- **deepseek-harness** source workspace (for local `--patch` loading) or an installed `dsh` CLI (for the published npm package)
+- **DeepSeek Harness `0.1.5-rc.3`** — this plugin hand-writes its Typert Remote descriptors, so it targets one DSH train:
 
-### Host: DeepSeek Harness `0.1.5-rc.3` (required)
+  ```bash
+  npm install --global @deepseek-ai/dsh@0.1.5-rc.3
+  ```
 
-This plugin hand-writes its Typert Remote descriptors, so it targets the published DSH train: **`0.1.5-rc.3`** (npm's `latest` tag for `@deepseek-ai/dsh`). Pin it explicitly anyway, so a future `next`-tag prerelease cannot slip in untested:
+  Every `@deepseek-ai/dsh*` service it injects (`web`, `credentials`, `typert`) comes from that host build, so those packages are declared as peers at the same train version rather than listed package by package. The components declared on their own:
 
-```bash
-npm install --global @deepseek-ai/dsh@0.1.5-rc.3
-```
+  | Component | Version | Role |
+  | --- | --- | --- |
+  | `@deepseek-ai/dsh` | `0.1.5-rc.3` | Host runtime (source of every `@deepseek-ai/dsh*` peer) |
+  | `@deepseek-ai/cordis` | `^4.0.2` | Plugin/context framework (peer + dev) |
+  | `react` | `^18.2` | Browser half only (dev) |
+  | `typescript` | `^7.0.2` | Type check over `src/host-core.js` (dev) |
 
-Every `@deepseek-ai/dsh*` service this plugin injects (`web`, `credentials`, `typert`) comes from that host build, so those packages are declared as peers at the same train version and are not listed package by package here. The components this project declares on their own:
+## Installation
 
-| Component | Version | Role |
-| --- | --- | --- |
-| `@deepseek-ai/dsh` | `0.1.5-rc.3` | Host runtime (source of every `@deepseek-ai/dsh*` peer) |
-| `@deepseek-ai/cordis` | `^4.0.2` | Plugin/context framework (peer + dev) |
-| `react` | `^18.2` | Browser half only (dev) |
-| `typescript` | `^7.0.2` | Type check over `src/host-core.js` (dev) |
-
-## Installation / Loading
-
-### Local development (`--patch`, loads source directly)
-
-Run inside the deepseek-harness source workspace (where the `dsh` launcher and `@deepseek-ai/*` packages live):
+**From npm** (the package declares `dsh.bundle.patch`, so `dsh plugin add` also activates the profile bundle):
 
 ```bash
-pnpm dsh web --patch D:/development/dsh-web-search/patch.web.yml
+dsh plugin --profile web add @ian_p/dsh-web-search
 ```
 
-`web` is a hard-coded alias for `--profile web` in the dsh launcher. The patch overlay (`patch.web.yml`) inserts `src/index.js` as a plugin row in the `web` profile and sets `searchProvider: dsh-web-search` on the native `web` row so its `web_search` tool routes through this plugin. No build or bundling is required:
-
-- The relative row path is anchored to the patch file's directory and resolved to a `file://` URL, which Node's native ESM loads directly.
-- The browser half is discovered via `dsh.client` manifest + `exports["./client"]` in this project's `package.json`, pointing at `src/client/bundle.js` (a hand-written `__ModuleLoader__` factory, no bundler).
-
-Once published, install it persistently into the `web` profile with `dsh plugin --profile web add @ian_p/dsh-web-search` (the package declares `dsh.bundle.patch`, so `dsh plugin add` activates it as a profile bundle); keep using `--patch` for local development.
-
-### Published (installs from npm)
-
-Host first, then plugin — the host must be pinned to `0.1.5-rc.3` (see [Requirements](#requirements)):
+**Local development** — run inside the harness source workspace; the overlay loads `src/index.js` directly, so no build step is needed:
 
 ```bash
-npm install --global @deepseek-ai/dsh@0.1.5-rc.3   # host, 0.1.5 train (required)
-dsh --version
-dsh plugin --profile web add @ian_p/dsh-web-search   # resolves @latest
+pnpm dsh web --patch /path/to/dsh-web-search/patch.web.yml
 ```
 
-`dsh plugin add` resolves the plugin's `@latest` dist-tag and, because the package declares `dsh.bundle.patch`, activates it as a profile bundle.
+`web` is the launcher's alias for `--profile web`. The overlay (`patch.web.yml`) inserts the plugin row and sets `searchProvider: dsh-web-search` on the native `web` row; the browser half is discovered through the `dsh.client` manifest plus `exports["./client"]`.
 
-## Quick Start
+**Linked checkout** (`dsh plugin --profile web add "link:/path/to/checkout"`) loads the published shape instead, i.e. `dist/` — run `pnpm run build` after editing `src/` (`pnpm install` also builds it through the `prepare` script). A host restart is required either way.
 
-Once loaded, the harness's native `web_search` tool is backed by this plugin's multi-provider fallback chain (replacing the built-in `deepseek-official` backend). The patch override (or the equivalent config on the `web` row) sets `searchProvider: dsh-web-search`. Results render with the native web card UI, and the chain falls back to `deepseek-official` only when no plugin provider returns usable results.
+## How the chain behaves
 
-No separate tool is needed — the native `web_search` tool is the sole entry point. It supports `site:` domain filtering in the query string (passed through to the provider) and respects the configured result count. The settings page lets you manage API keys, reorder providers, and test connections.
+Order comes from the settings page (drag to reorder) and is stored in the `dsh-web-search/config` credential record. Resolution: your ordered, non-excluded providers first, then every remaining provider in built-in order.
+
+For each provider, in order:
+
+1. `available()` — a local check, **no network call**: keyed providers need a credential record, SearXNG needs its endpoint, DuckDuckGo is always available. Not available ⇒ skipped.
+2. `search()` with a per-provider timeout (default 60 s, `timeout` in the config record).
+3. Success means a non-empty answer **or** at least one source; then the search returns immediately — later providers are never tried. There is no racing, no merging of providers, no retry and no cache.
+4. Failure means HTTP non-2xx, invalid JSON, a thrown error, or "no renderable content"; the reason is recorded and the next provider is tried.
+
+If every provider fails, the error names the last provider tried, and the plugin then retries the native `deepseek-official` provider before giving up.
+
+Each search logs one line to the host log:
+
+```text
+[14:32:07] [dsh-web-search] firecrawl: HTTP 429: ... → tavily: served (8 sources, 4437ms)
+[14:32:09] [dsh-web-search] trying exa
+[14:33:01] [dsh-web-search] brave: not configured → ... → all providers failed
+```
+
+A `trying` line with no completion line after it means that provider is still in flight (the harness log itself is not timestamped, so the plugin stamps its own lines).
+
+## Providers
+
+| ID | Label | Kind | How to activate |
+| --- | --- | --- | --- |
+| `tavily` | Tavily | API key | Save a Tavily API key |
+| `brave` | Brave | API key | Save a Brave API key |
+| `exa` | Exa | API key | Save an Exa API key |
+| `firecrawl` | Firecrawl | API key | Save a Firecrawl API key |
+| `jina` | Jina | API key | Save a Jina API key |
+| `kagi` | Kagi | API key | Save a Kagi API key |
+| `searxng` | SearXNG | Endpoint | Save a SearXNG instance endpoint |
+| `duckduckgo` | DuckDuckGo | None | Always available (default final fallback) |
+
+Per-provider details worth knowing:
+
+- **Tavily** — `results[].content` is a page chunk, not a description, so the request asks for `chunks_per_source: 1` (one relevant passage instead of three chunks of page chrome) and `include_published_date: true`.
+- **Firecrawl** — reports its own failures as HTTP 200 with `success: false` plus a `warning`; that is surfaced as the provider's failure reason instead of looking like an empty result set.
+- **DuckDuckGo** — keyless; the HTML front end is parsed, and a bot-challenge page yields zero sources so the chain keeps going.
+- **SearXNG** — self-hosted; `week` recency maps to `month` because the instance only understands day/month/year.
 
 ## Configuration
 
 ### Credentials
 
-All provider secrets live in harness **credential records** under the `dsh-web-search/` scope, managed from the settings page — no environment variables required.
+All provider secrets live in harness **credential records** under the `dsh-web-search/` scope, managed from the settings page — no environment variables. (Environment-variable credential refs would shadow saved values and stop the page from working.)
 
-- **API key providers** — stored as an `api-key` record, e.g. `dsh-web-search/tavily`.
-- **SearXNG** — stored as a `grant` record carrying the instance `endpoint`.
-- **DuckDuckGo** — no key; always available.
+- **API-key providers** — an `api-key` record, e.g. `dsh-web-search/tavily`.
+- **SearXNG** — a `grant` record carrying the instance `endpoint`.
+- **DuckDuckGo** — no key.
+- **Plugin config** — a `grant` record at `dsh-web-search/config`:
 
-> **Note:** do not reference environment variable names (e.g. `TAVILY_API_KEY`) as credential refs for keys — the launching environment treats them as read-only and would shadow any saved value. Records must be `{kind: 'api-key'}` or `{kind: 'grant'}`, and keys must contain a `/`, otherwise credential parsing fails and all set/unset operations throw.
+  ```yaml
+  order: [firecrawl, tavily, brave, exa, jina, kagi, searxng, duckduckgo]
+  exclude: []
+  timeout: 60        # seconds, per provider
+  ```
 
-### Provider order and limits
-
-- **Order** — provider fallback order is configurable; the settings page provides drag-to-reorder, stored in a `grant` record (`dsh-web-search/config`).
-- **Results per query** — 5 by default (stays under the native `maxResults` cap so no truncation warning is triggered).
+  The settings page writes `order`; `exclude` and `timeout` currently only via the record.
 
 ### Settings page
 
-The plugin registers an isolated settings section, **Search providers** (id `web-search-providers`), separate from the native web search config page. From there you can:
+Registered as the isolated settings section **Search providers** (id `web-search-providers`, order 12), separate from the native web-search config page. It lists providers in effective fallback order and lets you save or clear a key/endpoint, run a connection test, and drag the cards to reorder the chain. It talks to the host over the plugin's `websearch` Remote namespace (`list` / `setKey` / `unsetKey` / `setOrder` / `testProvider`).
 
-- save or clear a provider's API key / endpoint
-- test the connection to a provider
-- reorder the fallback chain by dragging
+The page registers `en` / `zh` dictionaries with the host `locale` service (sidebar label included) and paints itself with `--dsw-*` tokens using the host's own button, input and card geometry, so both language and theme follow the host.
 
-The page talks to the host over the plugin's `websearch` Remote namespace (`list` / `setKey` / `unsetKey` / `setOrder` / `testProvider`).
+## What the harness receives
 
-It follows the host in two ways: text comes from `en` / `zh` dictionaries registered with the `locale` service (sidebar label included, via a label thunk), and every colour is a design token (`var(--dsw-alias-*)`) rather than a fixed hex, so the page switches with the host's light/dark theme.
+`web_search` results are shaped to match the native path:
 
-## Providers
+- **Sources** carry `url`, `title?`, `snippet?`, `publishedAt?` only. Snippets are cleaned (markdown headings stripped, whitespace collapsed, chunk separators removed) and held to **150 characters** — the documented ceiling of the native citation excerpt — with a cut marked by `…`.
+- **The provider's own answer** (Tavily and Exa produce one) is passed as `content`, bounded to **400 characters**, and rendered as Markdown above the source list. The native provider never sends one.
+- **Truncation is the seam's decision.** The plugin hands back the provider's full source list with `truncated: false`; the harness caps it to `request.maxResults` and sets `truncated: true`, which is what surfaces the "sources truncated" notice to both the user and the model.
+- The tool has no field for the serving provider, so it is reported on the host log instead (see above).
 
-| ID | Label | Kind | How to activate |
-|---|---|---|---|
-| `tavily` | Tavily | API key | Set a Tavily API key |
-| `brave` | Brave | API key | Set a Brave API key |
-| `exa` | Exa | API key | Set an Exa API key |
-| `firecrawl` | Firecrawl | API key | Set a Firecrawl API key |
-| `jina` | Jina | API key | Set a Jina API key |
-| `kagi` | Kagi | API key | Set a Kagi API key |
-| `searxng` | SearXNG | Endpoint | Set a SearXNG instance endpoint |
-| `duckduckgo` | DuckDuckGo | None | Always available (default final fallback) |
-
-## Architecture / Project Layout
+## Architecture / project layout
 
 ```
 dsh-web-search/
-├── patch.web.yml            # --patch overlay: inserts src/index.js into the web profile
+├── patch.web.yml            # --patch overlay for local development (relative ./src/index.js)
+├── cordis.patch.yml         # published bundle patch (package specifier), declared via dsh.bundle.patch
 ├── src/                     # source of truth (never published)
-│   ├── index.js             # Static plugin host entry: ctx.web provider / remote ops / fetch transport
-│   ├── host-core.js         # Host-side pure functions (credentials, query parsing, per-provider request/response normalization)
-│   ├── remote.js            # websearch Remote namespace host (WebSearchController)
-│   └── client/
-│       └── bundle.js        # Browser half: hand-written __ModuleLoader__ factory bundle (no bundler),
-│                            # owns the settings-page state machine (reducer / deriveView / reorderProviders)
-├── scripts/build.mjs        # Build: clean-copy src/ → dist/ (the publishable tree)
-├── dist/                    # Build output — published to npm, git-ignored
-├── tests/
-│   ├── host-core.test.mjs       # Host-core pure function tests
-│   ├── interaction.test.mjs     # Reducer interaction tests (run against the shipped client bundle)
-│   ├── remote-contract.test.mjs # Remote RPC contract tests
-│   └── client-bundle.smoke.mjs  # Client bundle factory contract smoke test
-└── package.json             # main/exports → dist/, files: ["dist/"], dsh.client manifest
+│   ├── index.js             # host entry: ctx.web provider, chain orchestration, credential RPC ops
+│   ├── host-core.js         # pure functions: query parsing, per-provider request building and
+│   │                        # response normalization, snippet/answer policy
+│   ├── remote.js            # websearch Remote namespace (WebSearchController)
+│   └── client/bundle.js     # browser half: hand-written __ModuleLoader__ factory bundle (no bundler):
+│                            # the settings page and its single-copy state machine
+├── scripts/build.mjs        # build: clean copy of src/ → dist/ (the publishable tree)
+├── dist/                    # build output — published to npm, git-ignored
+├── tests/                   # 134 pure + 12 environment-dependent tests (see below)
+├── docs/DESIGN.md           # host contracts this plugin depends on, and why the code is shaped this way
+└── package.json             # main/exports → dist/, files: ["dist/", …], prepare builds dist/
 ```
-
-Design highlights:
-
-- **Provider registry** — declared in `PROVIDER_SPECS`; `resolveCandidates()` orders providers by configured order/excludes.
-- **Fallback chain** — `executeSearch()` tries providers in order, checks credential availability first, falls back on failure/empty results, and returns an error result (does not throw) when everything fails.
-- **HTTP transport** — native `fetch` in the host realm.
-- **`ctx.web` injection** — registers a provider with id `dsh-web-search` unconditionally; selection is decided by the web row config's `searchProvider`. When the patch is not applied, the native `web_search` throws `WEB_PROVIDER_AMBIGUOUS` (fail-loud).
-- **Host ↔ client RPC** — the static plugin uses the Typert Remote protocol: host methods are registered via `ctx.typert.register` with `src-json` codecs; the client bundle mounts the `websearch` namespace itself via `ctx.remote.$mount`.
 
 ## Development / Testing
 
-Fresh clone: `git clone` → `pnpm install` (installs the `@deepseek-ai/*` peer/dev deps from the registry, see `.npmrc`) → the commands below.
-
 ```bash
-npm run build    # stage the published tree: clean-copy src/ → dist/
-npm test         # 127 pure-function tests (zero dependencies, standalone clone)
-npm run test:rpc # 12 environment-dependent tests (resolve the 0.1.5-rc.3 train from the registry)
-npm run typecheck       # JSDoc types of src/host-core.js (tsconfig.types.json)
-npm run prepublishOnly  # build + full 139 tests + typecheck before publishing
+pnpm install             # installs peers/dev deps and runs `prepare`, which builds dist/
+pnpm run build           # stage dist/ from src/ (clean copy, no bundler, no new dependency)
+pnpm test                # 134 pure-function tests (node:test, zero dependencies)
+pnpm run test:rpc        # 12 environment-dependent tests (resolves the 0.1.5-rc.3 peers)
+pnpm run typecheck       # tsc -p tsconfig.types.json (JSDoc types of src/host-core.js)
+pnpm run prepublishOnly  # build + both test tiers + typecheck, before a publish
 ```
 
-139 tests split into two tiers:
-
-| Tier | Suite | File | Count |
+| Tier | Suite | Count | What it covers |
 | --- | --- | --- | --- |
-| Pure | Host core | `tests/host-core.test.mjs` | 90 |
-| Pure | Interaction | `tests/interaction.test.mjs` | 37 |
-| Env  | Remote contract | `tests/remote-contract.test.mjs` | 11 |
-| Env  | Client bundle smoke | `tests/client-bundle.smoke.mjs` | 1 |
+| Pure | `tests/host-core.test.mjs` | 97 | query parsing, provider request bodies, response normalization, snippet/answer policy, credential-record helpers |
+| Pure | `tests/interaction.test.mjs` | 37 | the settings page state machine, run against the shipped client bundle |
+| Env | `tests/remote-contract.test.mjs` | 11 | the Typert Remote contribution against the installed host contract |
+| Env | `tests/client-bundle.smoke.mjs` | 1 | bundle registration, `apply()`, and the injected stylesheet |
 
-**`npm test`** runs the 127 pure-function tests. These import only `node:*`, `../src/host-core.js`, and `../src/client/bundle.js` (the shipped browser bundle, loaded the way the browser loader does it: a `window.__ModuleLoader__` stub and nothing else). All are zero-dependency pure ESM. A standalone clone without the deepseek-harness workspace can run `npm test` with no setup.
-
-**`npm run test:rpc`** runs the 12 environment-dependent tests. These import `@deepseek-ai/dsh-typert-protocol` and `react`, resolved through the independently installed `@deepseek-ai/*` packages (`pnpm install` pulls them from the registry at the same `0.1.5-rc.3` train the host runs, no harness junction needed). A new clone can install and run the full test suite without the deepseek-harness workspace.
-
-**`npm run prepublishOnly`** runs both tiers (all 139 tests) plus the type check before publishing. All tests are plain Node scripts — no test framework.
-
-### Packaging (what npm publishes)
-
-`dist/` is the published artifact and only `dist/` — `package.json#files` lists it, `scripts/build.mjs` stages it from `src/` (a clean recursive copy: the host half is already plain ESM and the browser half is a hand-written factory bundle, so there is nothing to transform), and `dist/` is git-ignored. `prepublishOnly` builds before it tests, so a published tarball is never stale.
-
-Local development does not need the build: the `--patch` overlay (`patch.web.yml`) loads `src/index.js` directly through its relative path. The published bundle patch (`cordis.patch.yml`) inserts the bare package name instead, which resolves through `main` / `exports["."]` to `dist/index.js`.
+`src/index.js` (the host entry: transport, chain, credential ops, `ctx.web` injection) has no test coverage — it needs the harness runtime; `docs/DESIGN.md` records what that leaves unpinned.
 
 ## License
 
-[MIT](./LICENSE) © DeepSeek
+[MIT](./LICENSE) © ForeverYoungPp
