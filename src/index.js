@@ -32,6 +32,7 @@ import {
   recordToConfig,
   PROVIDER_SPECS,
   classifyConnectionTest,
+  capSnippets,
 } from './host-core.js'
 
 export const name = 'dsh-web-search'
@@ -69,7 +70,7 @@ export function apply(ctx) {
     if (!creds) return Object.assign({}, DEFAULT_CONFIG)
     try {
       return recordToConfig(await creds.readRecord(CONFIG_KEY), DEFAULT_CONFIG)
-    } catch (e) {
+    } catch {
       /* ignore */
     }
     return Object.assign({}, DEFAULT_CONFIG)
@@ -167,7 +168,7 @@ export function apply(ctx) {
         let data
         try {
           data = JSON.parse(result.stdout)
-        } catch (e) {
+        } catch {
           throw new Error(spec.label + ' returned invalid JSON: ' + (result.stdout || '').slice(0, 200))
         }
         return spec.normalize(data)
@@ -236,9 +237,14 @@ export function apply(ctx) {
           // "sources truncated" notice to both the user and the model. Pre-slicing here (as
           // this used to) kept the seam from ever seeing length > maxResults, so a capped list
           // was presented as complete.
+          //
+          // Snippets are capped to the native citation ceiling first: providers hand back
+          // SERP/page text of their own choosing (Tavily ~1.2 kB per result) while the native
+          // path can only ever show 150 characters of a cited excerpt.
+          const capped = capSnippets(response)
           return {
-            ...(response.answer ? { content: response.answer } : {}),
-            sources: response.sources || [],
+            ...(capped.answer ? { content: capped.answer } : {}),
+            sources: capped.sources || [],
             truncated: false,
           }
         }

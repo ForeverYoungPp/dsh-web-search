@@ -377,6 +377,36 @@ function boundedSnippet(short, long) {
 }
 
 /**
+ * Trim one snippet to {@link SNIPPET_MAX}, marking the cut with an ellipsis.
+ * @param {string} text
+ * @returns {string}
+ */
+function capSnippet(text) {
+  const s = typeof text === 'string' ? text : ''
+  return s.length > SNIPPET_MAX ? s.slice(0, SNIPPET_MAX - 1).trimEnd() + '\u2026' : s
+}
+
+/**
+ * Apply {@link capSnippet} to every source of a normalized provider response. Applied once at
+ * the result boundary so all providers are measured against the same ceiling the native
+ * citation excerpt obeys: Tavily alone returns ~1.2 kB of page text per result, ~8x the 150
+ * characters `deepseek-official` can ever show.
+ * @param {SearchResponse} response
+ * @returns {SearchResponse}
+ */
+export function capSnippets(response) {
+  if (!response || !Array.isArray(response.sources)) return response
+  return {
+    ...response,
+    sources: response.sources.map((source) => (
+      source && typeof source.snippet === 'string'
+        ? { ...source, snippet: capSnippet(source.snippet) }
+        : source
+    )),
+  }
+}
+
+/**
  * recency → YYYY-MM-DD (UTC, date-arithmetic safe, aligned with omp kagi recencyToDate).
  * @param {'day'|'week'|'month'|'year'} recency
  * @returns {string|undefined}

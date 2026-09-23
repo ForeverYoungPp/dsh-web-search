@@ -26,6 +26,7 @@ import {
   normalizeBraveResponse,
   buildExaRequest,
   normalizeExaResponse,
+  capSnippets,
   buildFirecrawlRequest,
   normalizeFirecrawlResponse,
   buildJinaRequest,
@@ -537,6 +538,27 @@ test('normalizeExaResponse: summary wins, a text body falls back through the sam
   assert.equal(capped.sources[0].snippet.length, 150)
   const short = normalizeExaResponse({ results: [{ url: 'https://d.com', title: 'D', summary: 's', text: page }] })
   assert.equal(short.sources[0].snippet, 's')
+})
+
+test('capSnippets: every snippet obeys the native 150-character ceiling', () => {
+  // Measured: Tavily returns ~1.2 kB of page text per result, the native excerpt is <=150.
+  const long = 'x'.repeat(1205)
+  const capped = capSnippets({
+    provider: 'tavily',
+    authMode: 'api_key',
+    sources: [
+      { url: 'https://a.com', snippet: long },
+      { url: 'https://b.com', snippet: 'short' },
+      { url: 'https://c.com' },
+    ],
+  })
+  assert.equal(capped.sources[0].snippet.length, 150)
+  assert.ok(capped.sources[0].snippet.endsWith('\u2026'), 'a cut snippet is marked')
+  assert.equal(capped.sources[1].snippet, 'short')
+  assert.equal('snippet' in capped.sources[2], false)
+  assert.equal(capped.authMode, 'api_key')
+  // A response without sources passes through untouched.
+  assert.deepEqual(capSnippets({ provider: 'x', sources: [], authMode: 'none' }).sources, [])
 })
 
 // ─── Kagi ───
