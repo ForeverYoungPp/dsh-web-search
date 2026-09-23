@@ -23,7 +23,7 @@
 | --- | --- |
 | **8 个 provider，一条链路** | Tavily、Brave、Exa、Firecrawl、Jina、Kagi、SearXNG、DuckDuckGo——顺序、子集随意配置。 |
 | **原生 `web_search` 集成** | Patch override 将 Harness 原生 `web_search` 工具路由到本插件的多 provider 回退链，替换内置的 `deepseek-official` 后端。已配置的 API key 和 DuckDuckGo（无需 key）均可通过原生网页卡片 UI 使用。 |
-| **应用内凭据管理** | API key 与 SearXNG endpoint 存放在 harness credential records 中，在专属的「Web Search Providers」设置页管理——保存、清除、连接测试、拖拽排序。 |
+| **应用内凭据管理** | API key 与 SearXNG endpoint 存放在 harness credential records 中，在专属的「搜索 Provider」设置页管理——保存、清除、连接测试、拖拽排序。 |
 | **Fail-loud（故障显式报错）** | 未应用 patch 时，原生 `web_search` 会返回 `WEB_PROVIDER_AMBIGUOUS`，而不是静默降级。 |
 | **国际化 + 主题跟随** | 设置页向宿主 `locale` 服务注册 `en` / `zh` 字典，并全部使用 `--dsw-*` 设计变量上色，因此语言与明/暗配色都跟随宿主。 |
 | **无打包器** | host 端本就是纯 ESM、浏览器端本就是手写 factory bundle，因此 `npm run build` 只是把 `src/` 拷成发布用的 `dist/`——没有任何编译转换。 |
@@ -115,7 +115,7 @@ dsh plugin --profile web add @deepseek-ai/dsh-web-search   # 解析 @latest
 
 ### 设置页
 
-插件注册了一个独立的设置区块 **Web Search Providers**（id `web-search-providers`），与原生网页搜索配置页分开。在这里可以：
+插件注册了一个独立的设置区块 **搜索 Provider**（id `web-search-providers`），与原生网页搜索配置页分开。在这里可以：
 
 - 保存或清除某个 provider 的 API key / endpoint
 - 测试与 provider 的连接

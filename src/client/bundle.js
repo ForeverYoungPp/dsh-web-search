@@ -93,7 +93,7 @@ window.__ModuleLoader__.load({
     // a missing key falls back to the key itself (host behaviour).
     var NS = 'dsh-web-search';
     var EN = {
-      title: 'Web Search Providers \u2014 Third-party',
+      title: 'Search providers',
       description: 'These third-party providers back the native web_search tool, falling back automatically in the order you configure. Keyed providers (Tavily, Brave, Exa, Firecrawl, Jina, Kagi) activate as soon as you save an API key; SearXNG activates once you provide its endpoint URL; DuckDuckGo needs no key and is the last-resort fallback. Drag the cards to set the priority order.',
       loading: 'Loading Web Search providers...',
       save: 'Save',
@@ -125,7 +125,7 @@ window.__ModuleLoader__.load({
       errorSyncThrew: 'websearch.list() threw synchronously: {message}',
     };
     var ZH = {
-      title: '网络搜索 Provider — 第三方',
+      title: '搜索 Provider',
       description: '这些第三方 provider 支撑原生 web_search 工具，按你配置的顺序自动回退。带 key 的 provider（Tavily、Brave、Exa、Firecrawl、Jina、Kagi）保存 API key 后即生效；SearXNG 在你填入 endpoint 后生效；DuckDuckGo 无需 key，是最后的兜底。拖拽卡片可调整优先级顺序。',
       loading: '正在加载网络搜索 provider...',
       save: '保存',

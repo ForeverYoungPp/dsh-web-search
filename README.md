@@ -23,7 +23,7 @@ The plugin routes the harness's native `web_search` tool through its own provide
 |---|---|
 | **8 providers, one chain** | Tavily, Brave, Exa, Firecrawl, Jina, Kagi, SearXNG, DuckDuckGo — any order, any subset. |
 | **Native `web_search` integration** | Patch override routes the harness's native `web_search` tool through this plugin's multi-provider fallback chain, replacing the built-in `deepseek-official` backend. Access your configured API keys and DuckDuckGo as a keyless last resort — all through the native web card UI. |
-| **In-app credential management** | API keys and SearXNG endpoints live in harness credential records, managed from a dedicated "Web Search Providers" settings page — save, clear, test, and drag-to-reorder. |
+| **In-app credential management** | API keys and SearXNG endpoints live in harness credential records, managed from a dedicated "Search providers" settings page — save, clear, test, and drag-to-reorder. |
 | **Fail-loud** | When the patch is not applied, the native `web_search` reports `WEB_PROVIDER_AMBIGUOUS` rather than silently degrading. |
 | **Localized and themed** | The settings page registers `en` / `zh` dictionaries with the host `locale` service and paints everything with `--dsw-*` design tokens, so both the language and the light/dark palette follow the host. |
 | **No bundler** | The host half is plain ESM and the browser half is a hand-written factory bundle, so `npm run build` merely stages `src/` into the published `dist/` — nothing is transformed. |
@@ -115,7 +115,7 @@ All provider secrets live in harness **credential records** under the `dsh-web-s
 
 ### Settings page
 
-The plugin registers an isolated settings section, **Web Search Providers** (id `web-search-providers`), separate from the native web search config page. From there you can:
+The plugin registers an isolated settings section, **Search providers** (id `web-search-providers`), separate from the native web search config page. From there you can:
 
 - save or clear a provider's API key / endpoint
 - test the connection to a provider
