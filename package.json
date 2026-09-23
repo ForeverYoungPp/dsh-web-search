@@ -1,17 +1,16 @@
 {
   "name": "@deepseek-ai/dsh-web-search",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.5-rc.3",
   "description": "Multi-provider third-party web search for the DeepSeek Harness: routes the native web_search tool through a configurable provider fallback chain, with an isolated provider settings page.",
   "type": "module",
-  "main": "src/index.js",
+  "main": "dist/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./client": "./src/client/bundle.js",
-    "./src/*": "./src/*",
+    ".": "./dist/index.js",
+    "./client": "./dist/client/bundle.js",
     "./package.json": "./package.json"
   },
   "files": [
-    "src/",
+    "dist/",
     "README_ZH.md",
     "cordis.patch.yml"
   ],
@@ -26,10 +25,10 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-api-remotes": "^0.1.2-alpha.2",
-    "@deepseek-ai/dsh-tools": "^0.1.2-alpha.2",
-    "@deepseek-ai/dsh-typert-protocol": "^0.1.2-alpha.2",
-    "@deepseek-ai/dsh-web": "^0.1.2-alpha.2",
+    "@deepseek-ai/dsh-api-remotes": "^0.1.5-rc.3",
+    "@deepseek-ai/dsh-tools": "^0.1.5-rc.3",
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.5-rc.3",
+    "@deepseek-ai/dsh-web": "^0.1.5-rc.3",
     "@deepseek-ai/cordis": "^4.0.2"
   },
   "peerDependenciesMeta": {
@@ -61,16 +60,18 @@
     }
   },
   "scripts": {
+    "build": "node scripts/build.mjs",
     "test": "node tests/host-core.test.mjs && node tests/interaction.test.mjs && echo OK",
     "test:rpc": "node tests/remote-contract.test.mjs && node tests/client-bundle.smoke.mjs && echo OK",
-    "prepublishOnly": "npm test && npm run test:rpc"
+    "typecheck": "tsc -p tsconfig.types.json",
+    "prepublishOnly": "npm run build && npm test && npm run test:rpc && npm run typecheck"
   },
   "license": "MIT",
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-tools": "0.1.2-alpha.2",
-    "@deepseek-ai/dsh-typert-protocol": "0.1.2-alpha.2",
-    "@deepseek-ai/dsh-web": "0.1.2-alpha.2",
+    "@deepseek-ai/dsh-tools": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-web": "0.1.5-rc.3",
     "react": "^18.2.0",
     "typescript": "^7.0.2"
   }

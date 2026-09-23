@@ -25,7 +25,7 @@
 | **原生 `web_search` 集成** | Patch override 将 Harness 原生 `web_search` 工具路由到本插件的多 provider 回退链，替换内置的 `deepseek-official` 后端。已配置的 API key 和 DuckDuckGo（无需 key）均可通过原生网页卡片 UI 使用。 |
 | **应用内凭据管理** | API key 与 SearXNG endpoint 存放在 harness credential records 中，在专属的「Web Search Providers」设置页管理——保存、清除、连接测试、拖拽排序。 |
 | **Fail-loud（故障显式报错）** | 未应用 patch 时，原生 `web_search` 会返回 `WEB_PROVIDER_AMBIGUOUS`，而不是静默降级。 |
-| **无需构建** | 纯 ESM 源码直接加载；浏览器端以手写 factory bundle 形式随包发布。 |
+| **无打包器** | host 端本就是纯 ESM、浏览器端本就是手写 factory bundle，因此 `npm run build` 只是把 `src/` 拷成发布用的 `dist/`——没有任何编译转换。 |
 
 ## 目录
 
@@ -43,25 +43,22 @@
 - **Node.js** `^22.19` 或 `>=24`
 - **deepseek-harness** 源码工作区（用于本地 `--patch` 加载）或已安装的 `dsh` CLI（用于发布版 npm 包）
 
-### 宿主：DeepSeek Harness `0.1.2` alpha 列车（必需）
+### 宿主：DeepSeek Harness `0.1.5-rc.3`（必需）
 
-本插件经 Typert Remote 协议调用宿主，并从 `@deepseek-ai/dsh-typert-protocol` import `RemoteError`（自 `0.1.2-alpha.2` 起存在），因此宿主必须运行 `0.1.2` alpha 构建——显式钉版本安装：
+本插件的 Typert Remote 描述符是手写的，因此它针对已发布的 DSH 列车：**`0.1.5-rc.3`**（即 `@deepseek-ai/dsh` 在 npm 上的 `latest`）。仍然建议显式钉版本，避免将来 `next` tag 上的预发布版被未经验证地装进来：
 
 ```bash
-npm install --global @deepseek-ai/dsh@0.1.2-alpha.2
+npm install --global @deepseek-ai/dsh@0.1.5-rc.3
 ```
 
-> **警告：** npm 上 `@deepseek-ai/dsh` 的 `latest` 标签当前是 `0.1.1-rc.2`——没有 `RemoteError` 的旧 rc 列车。裸 `npx @deepseek-ai/dsh web` 或裸 `npm install --global @deepseek-ai/dsh` 会装旧版，导致 RemoteError 崩溃。必须显式钉 `@0.1.2-alpha.2`（新列车在 `alpha` tag，当前为 `0.1.2-alpha.3`）。
+本插件注入的每一个 `@deepseek-ai/dsh*` 服务（`web`、`credentials`、`typert`）都由该宿主构建提供，因此这些包以同一列车版本声明为 peer，不再逐包罗列。本项目单独声明的组件：
 
-- Peer 依赖（均为可选，随 npm 包一起安装）：
-
-  | 包 | 版本 |
-  |---|---|
-  | `@deepseek-ai/dsh-api-remotes` | `^0.1.2-alpha.2` |
-  | `@deepseek-ai/dsh-tools` | `^0.1.2-alpha.2` |
-  | `@deepseek-ai/dsh-typert-protocol` | `^0.1.2-alpha.2` |
-  | `@deepseek-ai/dsh-web` | `^0.1.2-alpha.2` |
-  | `@deepseek-ai/cordis` | `^4.0.2` |
+| 组件 | 版本 | 作用 |
+| --- | --- | --- |
+| `@deepseek-ai/dsh` | `0.1.5-rc.3` | 宿主运行时（所有 `@deepseek-ai/dsh*` peer 的来源） |
+| `@deepseek-ai/cordis` | `^4.0.2` | 插件/上下文框架（peer + dev） |
+| `react` | `^18.2` | 仅浏览器端（dev） |
+| `typescript` | `^7.0.2` | `src/host-core.js` 的类型检查（dev） |
 
 ## 安装 / 加载
 
@@ -82,10 +79,10 @@ pnpm dsh web --patch D:/development/dsh-web-search/patch.web.yml
 
 ### 发布版（从 npm 安装）
 
-先装宿主，再装插件——宿主必须钉在 `0.1.2` alpha 列车（见[环境要求](#环境要求)）：
+先装宿主，再装插件——宿主必须钉在 `0.1.5-rc.3`（见[环境要求](#环境要求)）：
 
 ```bash
-npm install --global @deepseek-ai/dsh@0.1.2-alpha.2   # 宿主，0.1.2 alpha 列车（必需）
+npm install --global @deepseek-ai/dsh@0.1.5-rc.3   # 宿主，0.1.5 列车（必需）
 dsh --version
 dsh plugin --profile web add @deepseek-ai/dsh-web-search   # 解析 @latest
 ```
@@ -143,19 +140,21 @@ dsh plugin --profile web add @deepseek-ai/dsh-web-search   # 解析 @latest
 ```
 dsh-web-search/
 ├── patch.web.yml            # --patch 覆盖：把 src/index.js 插入 web profile
-├── src/
+├── src/                     # 唯一真实来源（不发布）
 │   ├── index.js             # 静态插件 host 入口：ctx.web provider / remote 操作 / fetch 传输
 │   ├── host-core.js         # host 端纯函数（凭据、查询解析、各 provider 请求/响应归一化）
-│   ├── interaction.js       # 设置页交互状态机（纯 reducer，有单元测试）
 │   ├── remote.js            # websearch Remote 命名空间 host（WebSearchController）
 │   └── client/
-│       └── bundle.js        # 浏览器端：手写 __ModuleLoader__ factory bundle（无打包器）
+│       └── bundle.js        # 浏览器端：手写 __ModuleLoader__ factory bundle（无打包器），
+│                            # 持有设置页状态机（reducer / deriveView / reorderProviders）
+├── scripts/build.mjs        # 构建：把 src/ 干净拷成 dist/（发布树）
+├── dist/                    # 构建产物——发布到 npm，被 git 忽略
 ├── tests/
 │   ├── host-core.test.mjs       # host-core 纯函数测试
-│   ├── interaction.test.mjs     # reducer 交互测试
+│   ├── interaction.test.mjs     # reducer 交互测试（直接跑发货的 client bundle）
 │   ├── remote-contract.test.mjs # Remote RPC 契约测试
 │   └── client-bundle.smoke.mjs  # client bundle factory 契约冒烟测试
-└── package.json             # exports["./client"] + dsh.client manifest
+└── package.json             # main/exports → dist/，files: ["dist/"]，dsh.client manifest
 ```
 
 设计要点：
@@ -171,25 +170,33 @@ dsh-web-search/
 全新 clone：`git clone` → `pnpm install`（从 registry 安装 `@deepseek-ai/*` peer/dev 依赖，见 `.npmrc`）→ 执行下面的命令。
 
 ```bash
+npm run build    # 产出发布树：把 src/ 干净拷成 dist/
 npm test         # 127 个纯函数测试（零依赖，独立 clone 即可运行）
-npm run test:rpc # 12 个环境相关测试（解析独立安装的 @deepseek-ai/*）
-npm run prepublishOnly  # 发布前跑满 139 个
+npm run test:rpc # 12 个环境相关测试（从 registry 解析 0.1.5-rc.3 列车）
+npm run typecheck       # 对 src/host-core.js 的 JSDoc 类型检查（tsconfig.types.json）
+npm run prepublishOnly  # 发布前：构建 + 跑满 139 个测试 + 类型检查
 ```
 
 139 个测试分为两层：
 
 | 层级 | 套件 | 文件 | 数量 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 纯函数 | Host core | `tests/host-core.test.mjs` | 90 |
 | 纯函数 | Interaction | `tests/interaction.test.mjs` | 37 |
 | 环境 | Remote contract | `tests/remote-contract.test.mjs` | 11 |
 | 环境 | Client bundle smoke | `tests/client-bundle.smoke.mjs` | 1 |
 
-**`npm test`** 运行 127 个纯函数测试。这些测试只 import `node:*` 与 `../src/host-core.js` / `../src/interaction.js`——两者都是零依赖的纯 ESM 模块。没有 deepseek-harness 工作区的独立 clone 也能直接运行 `npm test`，无需任何准备。
+**`npm test`** 运行 127 个纯函数测试。这些测试只 import `node:*`、`../src/host-core.js` 与 `../src/client/bundle.js`（真正发货的浏览器 bundle，按浏览器加载器的方式载入：只提供 `window.__ModuleLoader__` 桩）——都是零依赖的纯 ESM。没有 deepseek-harness 工作区的独立 clone 也能直接运行 `npm test`，无需任何准备。
 
-**`npm run test:rpc`** 运行 12 个环境相关测试。这些测试 import `@deepseek-ai/dsh-typert-protocol` 与 `react`，通过独立安装的 `@deepseek-ai/*` 包解析（`pnpm install` 从 registry 拉取，无需 harness junction）。新 clone 无需 deepseek-harness 工作区即可安装并跑完整测试套件。
+**`npm run test:rpc`** 运行 12 个环境相关测试。这些测试 import `@deepseek-ai/dsh-typert-protocol` 与 `react`，通过独立安装的 `@deepseek-ai/*` 包解析（`pnpm install` 从 registry 拉取与宿主相同的 `0.1.5-rc.3` 列车，无需 harness junction）。新 clone 无需 deepseek-harness 工作区即可安装并跑完整测试套件。
 
-**`npm run prepublishOnly`** 在发布前同时运行两层（全部 139 个测试）。所有测试都是纯 Node 脚本——没有测试框架。
+**`npm run prepublishOnly`** 在发布前同时运行两层（全部 139 个测试）加类型检查。所有测试都是纯 Node 脚本——没有测试框架。
+
+### 打包（npm 实际发布什么）
+
+发布产物只有 `dist/`——`package.json#files` 只列它，`scripts/build.mjs` 把 `src/` 拷进去（干净递归拷贝：host 端本就是纯 ESM、浏览器端本就是手写 factory bundle，没有需要转换的东西），而 `dist/` 被 git 忽略。`prepublishOnly` 先构建再测试，因此发布的 tarball 不会过期。
+
+本地开发不需要构建：`--patch` 覆盖文件（`patch.web.yml`）用相对路径直接加载 `src/index.js`；发布用的 bundle patch（`cordis.patch.yml`）插入的是裸包名，经 `main` / `exports["."]` 解析到 `dist/index.js`。
 
 ## 许可证
 

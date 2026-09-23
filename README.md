@@ -25,7 +25,7 @@ The plugin routes the harness's native `web_search` tool through its own provide
 | **Native `web_search` integration** | Patch override routes the harness's native `web_search` tool through this plugin's multi-provider fallback chain, replacing the built-in `deepseek-official` backend. Access your configured API keys and DuckDuckGo as a keyless last resort — all through the native web card UI. |
 | **In-app credential management** | API keys and SearXNG endpoints live in harness credential records, managed from a dedicated "Web Search Providers" settings page — save, clear, test, and drag-to-reorder. |
 | **Fail-loud** | When the patch is not applied, the native `web_search` reports `WEB_PROVIDER_AMBIGUOUS` rather than silently degrading. |
-| **No build step** | Pure ESM source loaded directly; the browser half ships as a hand-written factory bundle. |
+| **No bundler** | The host half is plain ESM and the browser half is a hand-written factory bundle, so `npm run build` merely stages `src/` into the published `dist/` — nothing is transformed. |
 
 ## Table of Contents
 
@@ -43,25 +43,22 @@ The plugin routes the harness's native `web_search` tool through its own provide
 - **Node.js** `^22.19` or `>=24`
 - **deepseek-harness** source workspace (for local `--patch` loading) or an installed `dsh` CLI (for the published npm package)
 
-### Host: DeepSeek Harness `0.1.2` alpha train (required)
+### Host: DeepSeek Harness `0.1.5-rc.3` (required)
 
-This plugin calls the host over the Typert Remote protocol and imports `RemoteError` from `@deepseek-ai/dsh-typert-protocol` (present since `0.1.2-alpha.2`), so the host must run a `0.1.2` alpha build — pin it explicitly:
+This plugin hand-writes its Typert Remote descriptors, so it targets the published DSH train: **`0.1.5-rc.3`** (npm's `latest` tag for `@deepseek-ai/dsh`). Pin it explicitly anyway, so a future `next`-tag prerelease cannot slip in untested:
 
 ```bash
-npm install --global @deepseek-ai/dsh@0.1.2-alpha.2
+npm install --global @deepseek-ai/dsh@0.1.5-rc.3
 ```
 
-> **Warning:** npm's `latest` tag for `@deepseek-ai/dsh` is currently `0.1.1-rc.2` — the old RC train, which lacks `RemoteError`. A bare `npx @deepseek-ai/dsh web` or `npm install --global @deepseek-ai/dsh` installs that old build and crashes with `RemoteError`. Pin `@0.1.2-alpha.2` explicitly — the new train lives on the `alpha` tag (currently `0.1.2-alpha.3`).
+Every `@deepseek-ai/dsh*` service this plugin injects (`web`, `credentials`, `typert`) comes from that host build, so those packages are declared as peers at the same train version and are not listed package by package here. The components this project declares on their own:
 
-- Peer dependencies (all optional, installed with the package):
-
-  | Package | Version |
-  |---|---|
-  | `@deepseek-ai/dsh-api-remotes` | `^0.1.2-alpha.2` |
-  | `@deepseek-ai/dsh-tools` | `^0.1.2-alpha.2` |
-  | `@deepseek-ai/dsh-typert-protocol` | `^0.1.2-alpha.2` |
-  | `@deepseek-ai/dsh-web` | `^0.1.2-alpha.2` |
-  | `@deepseek-ai/cordis` | `^4.0.2` |
+| Component | Version | Role |
+| --- | --- | --- |
+| `@deepseek-ai/dsh` | `0.1.5-rc.3` | Host runtime (source of every `@deepseek-ai/dsh*` peer) |
+| `@deepseek-ai/cordis` | `^4.0.2` | Plugin/context framework (peer + dev) |
+| `react` | `^18.2` | Browser half only (dev) |
+| `typescript` | `^7.0.2` | Type check over `src/host-core.js` (dev) |
 
 ## Installation / Loading
 
@@ -82,10 +79,10 @@ Once published, install it persistently into the `web` profile with `dsh plugin 
 
 ### Published (installs from npm)
 
-Host first, then plugin — the host must be pinned to the `0.1.2` alpha train (see [Requirements](#requirements)):
+Host first, then plugin — the host must be pinned to `0.1.5-rc.3` (see [Requirements](#requirements)):
 
 ```bash
-npm install --global @deepseek-ai/dsh@0.1.2-alpha.2   # host, 0.1.2 alpha train (required)
+npm install --global @deepseek-ai/dsh@0.1.5-rc.3   # host, 0.1.5 train (required)
 dsh --version
 dsh plugin --profile web add @deepseek-ai/dsh-web-search   # resolves @latest
 ```
@@ -143,19 +140,21 @@ The page talks to the host over the plugin's `websearch` Remote namespace (`list
 ```
 dsh-web-search/
 ├── patch.web.yml            # --patch overlay: inserts src/index.js into the web profile
-├── src/
+├── src/                     # source of truth (never published)
 │   ├── index.js             # Static plugin host entry: ctx.web provider / remote ops / fetch transport
 │   ├── host-core.js         # Host-side pure functions (credentials, query parsing, per-provider request/response normalization)
-│   ├── interaction.js       # Settings-page interaction state machine (pure reducer, unit-tested)
 │   ├── remote.js            # websearch Remote namespace host (WebSearchController)
 │   └── client/
-│       └── bundle.js        # Browser half: hand-written __ModuleLoader__ factory bundle (no bundler)
+│       └── bundle.js        # Browser half: hand-written __ModuleLoader__ factory bundle (no bundler),
+│                            # owns the settings-page state machine (reducer / deriveView / reorderProviders)
+├── scripts/build.mjs        # Build: clean-copy src/ → dist/ (the publishable tree)
+├── dist/                    # Build output — published to npm, git-ignored
 ├── tests/
 │   ├── host-core.test.mjs       # Host-core pure function tests
-│   ├── interaction.test.mjs     # Reducer interaction tests
+│   ├── interaction.test.mjs     # Reducer interaction tests (run against the shipped client bundle)
 │   ├── remote-contract.test.mjs # Remote RPC contract tests
 │   └── client-bundle.smoke.mjs  # Client bundle factory contract smoke test
-└── package.json             # exports["./client"] + dsh.client manifest
+└── package.json             # main/exports → dist/, files: ["dist/"], dsh.client manifest
 ```
 
 Design highlights:
@@ -171,25 +170,33 @@ Design highlights:
 Fresh clone: `git clone` → `pnpm install` (installs the `@deepseek-ai/*` peer/dev deps from the registry, see `.npmrc`) → the commands below.
 
 ```bash
+npm run build    # stage the published tree: clean-copy src/ → dist/
 npm test         # 127 pure-function tests (zero dependencies, standalone clone)
-npm run test:rpc # 12 environment-dependent tests (resolves independently installed @deepseek-ai/*)
-npm run prepublishOnly  # full 139 before publishing
+npm run test:rpc # 12 environment-dependent tests (resolve the 0.1.5-rc.3 train from the registry)
+npm run typecheck       # JSDoc types of src/host-core.js (tsconfig.types.json)
+npm run prepublishOnly  # build + full 139 tests + typecheck before publishing
 ```
 
 139 tests split into two tiers:
 
 | Tier | Suite | File | Count |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Pure | Host core | `tests/host-core.test.mjs` | 90 |
 | Pure | Interaction | `tests/interaction.test.mjs` | 37 |
 | Env  | Remote contract | `tests/remote-contract.test.mjs` | 11 |
 | Env  | Client bundle smoke | `tests/client-bundle.smoke.mjs` | 1 |
 
-**`npm test`** runs the 127 pure-function tests. These import only `node:*` and `../src/host-core.js` / `../src/interaction.js` — both of which are zero-dependency pure ESM modules. A standalone clone without the deepseek-harness workspace can run `npm test` with no setup.
+**`npm test`** runs the 127 pure-function tests. These import only `node:*`, `../src/host-core.js`, and `../src/client/bundle.js` (the shipped browser bundle, loaded the way the browser loader does it: a `window.__ModuleLoader__` stub and nothing else). All are zero-dependency pure ESM. A standalone clone without the deepseek-harness workspace can run `npm test` with no setup.
 
-**`npm run test:rpc`** runs the 12 environment-dependent tests. These import `@deepseek-ai/dsh-typert-protocol` and `react`, resolved through the independently installed `@deepseek-ai/*` packages (`pnpm install` pulls them from the registry, no harness junction needed). A new clone can install and run the full test suite without the deepseek-harness workspace.
+**`npm run test:rpc`** runs the 12 environment-dependent tests. These import `@deepseek-ai/dsh-typert-protocol` and `react`, resolved through the independently installed `@deepseek-ai/*` packages (`pnpm install` pulls them from the registry at the same `0.1.5-rc.3` train the host runs, no harness junction needed). A new clone can install and run the full test suite without the deepseek-harness workspace.
 
-**`npm run prepublishOnly`** runs both tiers (all 139 tests) before publishing. All tests are plain Node scripts — no test framework.
+**`npm run prepublishOnly`** runs both tiers (all 139 tests) plus the type check before publishing. All tests are plain Node scripts — no test framework.
+
+### Packaging (what npm publishes)
+
+`dist/` is the published artifact and only `dist/` — `package.json#files` lists it, `scripts/build.mjs` stages it from `src/` (a clean recursive copy: the host half is already plain ESM and the browser half is a hand-written factory bundle, so there is nothing to transform), and `dist/` is git-ignored. `prepublishOnly` builds before it tests, so a published tarball is never stale.
+
+Local development does not need the build: the `--patch` overlay (`patch.web.yml`) loads `src/index.js` directly through its relative path. The published bundle patch (`cordis.patch.yml`) inserts the bare package name instead, which resolves through `main` / `exports["."]` to `dist/index.js`.
 
 ## License
 

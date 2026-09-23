@@ -20,3 +20,8 @@ plugin/
 
 # Internal handoff doc (local only, never publish)
 HANDOVER.md
+# Local Pi runtime state
+.atl/
+
+# Build output: npm publishes dist/ (staged from src/ by scripts/build.mjs)
+dist/
