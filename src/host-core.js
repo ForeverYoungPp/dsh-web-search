@@ -117,7 +117,7 @@ export function sanitizeProviderOrder(value) {
  * @returns {SetKeyResult}
  */
 export function validateSetKey(args) {
-  const id = args && args.id
+  const id = args && typeof args.id === 'string' ? args.id : ''
   const value = args && args.value
   const meta = PROVIDER_SPECS[id]
   if (!meta) return { ok: false, error: 'Unknown provider' }
@@ -141,7 +141,7 @@ export function validateSetKey(args) {
  * @returns {UnsetKeyResult}
  */
 export function validateUnsetKey(args) {
-  const id = args && args.id
+  const id = args && typeof args.id === 'string' ? args.id : ''
   const meta = PROVIDER_SPECS[id]
   if (!meta) return { ok: false, error: 'Unknown provider' }
   if (meta.kind === 'none') return { ok: false, error: 'Provider needs no API key' }
@@ -224,7 +224,9 @@ export function recordApiKey(record) {
 export function parseQuery(query) {
   const raw = typeof query === 'string' ? query : ''
   if (!raw.trim()) return { sites: [], excludedSites: [], cleaned: raw }
+  /** @type {string[]} */
   let sites = []
+  /** @type {string[]} */
   let excludedSites = []
   let cleaned = raw.trim()
 
@@ -255,6 +257,7 @@ export function buildTavilyBody(params) {
   const limit = rawLimit === undefined
     ? 10
     : Math.min(Math.max(Number(rawLimit) || 1, 1), 20)
+  /** @type {Record<string, unknown>} */
   const body = {
     query: parsed.cleaned || '',
     topic: 'general',
@@ -262,6 +265,7 @@ export function buildTavilyBody(params) {
     max_results: limit,
   }
   if (params && params.recency) {
+    /** @type {Record<string, string>} */
     const recencyMap = { day: 'd', week: 'w', month: 'm', year: 'y' }
     body.time_range = recencyMap[params.recency] || params.recency
   }
@@ -291,9 +295,11 @@ export function buildTavilyRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeTavilyResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   if (data && Array.isArray(data.results)) {
     for (const r of data.results) {
+      /** @type {SearchSource} */
       const source = {
         url: (r && r.url) || '',
         title: (r && r.title) || '',
@@ -344,6 +350,21 @@ export function hostOf(site) {
   const s = String(site || '').trim()
   if (!s) return ''
   return s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^\/\//, '').split('/')[0].split(/[?#]/)[0]
+}
+
+/**
+ * Build a SERP-sized snippet: the short field when it has content, otherwise a bounded,
+ * whitespace-collapsed prefix of the long one. Some providers return whole documents —
+ * Firecrawl's scraped `markdown`, Jina's `content` — and a full page must never reach the
+ * result card or the model-facing output.
+ * @param {unknown} short Short field (a search-result description)
+ * @param {unknown} long Long field (a scraped page body)
+ * @returns {string}
+ */
+function boundedSnippet(short, long) {
+  if (typeof short === 'string' && short.trim()) return short.trim()
+  const text = typeof long === 'string' ? long.replace(/\s+/g, ' ').trim() : ''
+  return text.slice(0, 500)
 }
 
 /**
@@ -427,6 +448,7 @@ export function buildUrlWithQuery(base, params) {
 
 export const BRAVE_URL = 'https://api.search.brave.com/res/v1/web/search'
 
+/** @type {Record<string, string>} */
 const BRAVE_RECENCY = { day: 'pd', week: 'pw', month: 'pm', year: 'py' }
 
 /**
@@ -437,6 +459,7 @@ const BRAVE_RECENCY = { day: 'pd', week: 'pw', month: 'pm', year: 'py' }
  * @returns {{ method: string, url: string, headers: Record<string,string> }}
  */
 export function buildBraveRequest(params, key) {
+  /** @type {Record<string, unknown>} */
   const queryParams = {
     q: (params && params.query) || '',
     count: String(clampNumResults(params && (params.maxResults ?? params.limit))),
@@ -460,11 +483,13 @@ export function buildBraveRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeBraveResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   const results = data && data.web && Array.isArray(data.web.results) ? data.web.results : []
   for (const r of results) {
     const url = r && r.url
     if (!url) continue
+    /** @type {SearchSource} */
     const source = { url, title: (r && r.title) || hostOf(url) || 'Untitled' }
     const snippets = []
     if (r && typeof r.description === 'string' && r.description.trim()) snippets.push(r.description.trim())
@@ -477,6 +502,7 @@ export function normalizeBraveResponse(data) {
     sources.push(source)
   }
   const requestId = data && data.web && data.web.request_id
+  /** @type {SearchResponse} */
   const response = { provider: 'brave', sources, authMode: 'api_key' }
   if (requestId) response.requestId = requestId
   return response
@@ -497,6 +523,7 @@ export const EXA_URL = 'https://api.exa.ai/search'
  */
 export function buildExaRequest(params, key) {
   const parsed = parseQuery(params && params.query)
+  /** @type {Record<string, unknown>} */
   const body = {
     query: parsed.cleaned || '',
     numResults: clampNumResults(params && (params.maxResults ?? params.limit)),
@@ -524,11 +551,13 @@ export function buildExaRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeExaResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   if (data && Array.isArray(data.results)) {
     for (const r of data.results) {
       const url = r && r.url
       if (!url) continue
+      /** @type {SearchSource} */
       const source = { url, title: (r && r.title) || hostOf(url) || 'Untitled' }
       const snippet = (r && (r.summary || r.text || (Array.isArray(r.highlights) ? r.highlights.filter(Boolean).join(' ') : undefined)))
       if (snippet) source.snippet = snippet.length > 500 ? snippet.slice(0, 500) : snippet
@@ -539,6 +568,7 @@ export function normalizeExaResponse(data) {
   }
   const answer = synthesizeAnswer(data && data.results)
   const requestId = data && data.requestId
+  /** @type {SearchResponse} */
   const response = { provider: 'exa', sources, authMode: 'api_key' }
   if (answer) response.answer = answer
   if (requestId) response.requestId = requestId
@@ -550,6 +580,7 @@ export function normalizeExaResponse(data) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const FIRECRAWL_URL = 'https://api.firecrawl.dev/v2/search'
+/** @type {Record<string, string>} */
 const FIRECRAWL_RECENCY = { day: 'qdr:d', week: 'qdr:w', month: 'qdr:m', year: 'qdr:y' }
 
 /**
@@ -560,6 +591,7 @@ const FIRECRAWL_RECENCY = { day: 'qdr:d', week: 'qdr:w', month: 'qdr:m', year: '
  * @returns {ProviderRequest}
  */
 export function buildFirecrawlRequest(params, key) {
+  /** @type {Record<string, unknown>} */
   const body = {
     query: (params && params.query) || '',
     limit: clampNumResults(params && (params.maxResults ?? params.limit)),
@@ -582,6 +614,7 @@ export function buildFirecrawlRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeFirecrawlResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   const list = Array.isArray(data && data.data)
     ? data.data
@@ -593,12 +626,16 @@ export function normalizeFirecrawlResponse(data) {
   for (const r of list) {
     const url = r && r.url
     if (!url) continue
+    /** @type {SearchSource} */
     const source = { url, title: (r && r.title) || hostOf(url) || 'Untitled' }
-    const snippet = r && (r.description || r.snippet || r.markdown)
+    // Firecrawl v2 also returns the scraped page in `markdown`; a whole document must never
+    // become a snippet, so only its bounded collapsed prefix can stand in.
+    const snippet = boundedSnippet(r && (r.description || r.snippet), r && r.markdown)
     if (snippet) source.snippet = snippet
     sources.push(source)
   }
   const requestId = data && data.id
+  /** @type {SearchResponse} */
   const response = { provider: 'firecrawl', sources, authMode: 'api_key' }
   if (requestId) response.requestId = requestId
   return response
@@ -627,6 +664,7 @@ export function buildJinaRequest(params, key) {
   const url = buildUrlWithQuery(`${JINA_URL}/${encodeURIComponent(query)}`, {
     count: String(clampNumResults(params && (params.maxResults ?? params.limit), 5, 20)),
   })
+  /** @type {Record<string, string>} */
   const headers = {
     Accept: 'application/json',
     Authorization: `Bearer ${key}`,
@@ -643,14 +681,18 @@ export function buildJinaRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeJinaResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   const list = Array.isArray(data) ? data : data && Array.isArray(data.data) ? data.data : []
   for (const r of list) {
     const url = r && r.url
     if (!url) continue
+    /** @type {SearchSource} */
     const source = { url, title: (r && r.title) || hostOf(url) || 'Untitled' }
-    const snippet = r && (r.description || r.content)
-    if (snippet) source.snippet = snippet.trim()
+    // `X-Respond-With: no-content` should keep Jina from sending page bodies; cap the fallback
+    // anyway, in case the instance ignores that header.
+    const snippet = boundedSnippet(r && r.description, r && r.content)
+    if (snippet) source.snippet = snippet
     sources.push(source)
   }
   return { provider: 'jina', sources, authMode: 'api_key' }
@@ -669,6 +711,7 @@ export const KAGI_URL = 'https://kagi.com/api/v1/search'
  * @returns {ProviderRequest}
  */
 export function buildKagiRequest(params, key) {
+  /** @type {Record<string, unknown>} */
   const body = {
     query: (params && params.query) || '',
     workflow: 'search',
@@ -693,13 +736,19 @@ export function buildKagiRequest(params, key) {
  * @returns {SearchResponse}
  */
 export function normalizeKagiResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   const buckets = data && data.data && typeof data.data === 'object' ? data.data : {}
+  /**
+   * @param {any[]|undefined} items
+   * @param {string} [tag]
+   */
   const collect = (items, tag) => {
     if (!Array.isArray(items)) return
     for (const item of items) {
       const url = item && (item.url || item.href || item.link)
       if (!url) continue
+      /** @type {SearchSource} */
       const source = { url, title: (item && (item.title || item.name)) || hostOf(url) || 'Untitled' }
       const snippet = item && (item.snippet || item.description || item.summary)
       if (snippet) source.snippet = snippet
@@ -718,6 +767,7 @@ export function normalizeKagiResponse(data) {
     const da = buckets.direct_answer[0]
     answer = da && (da.snippet || da.title)
   }
+  /** @type {SearchResponse} */
   const response = { provider: 'kagi', sources, authMode: 'api_key' }
   if (answer) response.answer = answer
   if (requestId) response.requestId = requestId
@@ -730,7 +780,10 @@ export function normalizeKagiResponse(data) {
 
 export const SEARXNG_PATH = '/search'
 
-/** SearXNG recency → time_range (only day/month/year supported, week maps to month). */
+/**
+ * SearXNG recency → time_range (only day/month/year supported, week maps to month).
+ * @type {Record<string, string>}
+ */
 export const SEARXNG_RECENCY = { day: 'day', week: 'month', month: 'month', year: 'year' }
 
 /**
@@ -746,6 +799,7 @@ export function buildSearXNGRequest(params, endpoint) {
   if (base.endsWith('/search')) {
     base = base.slice(0, -'/search'.length)
   }
+  /** @type {Record<string, unknown>} */
   const queryParams = {
     q: (params && params.query) || '',
     format: 'json',
@@ -763,11 +817,13 @@ export function buildSearXNGRequest(params, endpoint) {
  * @returns {SearchResponse}
  */
 export function normalizeSearXNGResponse(data) {
+  /** @type {SearchSource[]} */
   const sources = []
   const results = data && Array.isArray(data.results) ? data.results : []
   for (const r of results) {
     const url = r && r.url
     if (!url) continue
+    /** @type {SearchSource} */
     const source = { url, title: (r && r.title) || hostOf(url) || 'Untitled' }
     const snippet = r && (r.content || r.snippet)
     if (snippet) source.snippet = snippet.trim()
@@ -776,6 +832,7 @@ export function normalizeSearXNGResponse(data) {
     sources.push(source)
   }
   const answer = formatSearXNGAnswers(data && data.answers)
+  /** @type {SearchResponse} */
   const response = { provider: 'searxng', sources, authMode: 'endpoint' }
   if (answer) response.answer = answer
   return response
@@ -783,7 +840,7 @@ export function normalizeSearXNGResponse(data) {
 
 /**
  * Flatten SearXNG answers (strings or structured objects) into an answer (at most 3).
- * @param {Array} [answers]
+ * @param {any[]} [answers]
  * @returns {string|undefined}
  */
 export function formatSearXNGAnswers(answers) {
@@ -805,6 +862,7 @@ export function formatSearXNGAnswers(answers) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const DUCKDUCKGO_HTML_URL = 'https://html.duckduckgo.com/html/'
+/** @type {Record<string, string>} */
 const DDG_RECENCY = { day: 'd', week: 'w', month: 'm', year: 'y' }
 
 /**
@@ -813,6 +871,7 @@ const DDG_RECENCY = { day: 'd', week: 'w', month: 'm', year: 'y' }
  * @returns {ProviderRequest}
  */
 export function buildDuckDuckGoRequest(params) {
+  /** @type {Record<string, unknown>} */
   const formParams = {
     q: (params && params.query) || '',
     kl: 'us-en',
@@ -881,9 +940,10 @@ export function isDuckDuckGoAnomaly(html) {
 /**
  * Parse DDG HTML results page, returning unified sources.
  * @param {string} html
- * @returns {Array<{url: string, title: string, snippet?: string}>}
+ * @returns {SearchSource[]}
  */
 export function parseDuckDuckGoHtml(html) {
+  /** @type {SearchSource[]} */
   const sources = []
   const text = String(html || '')
   const blockRe =
@@ -899,6 +959,7 @@ export function parseDuckDuckGoHtml(html) {
     const titleText = decodeDuckDuckGoHtml(title[2])
     if (!titleText) continue
     const snip = snippetRe.exec(block)
+    /** @type {SearchSource} */
     const source = { url, title: titleText }
     if (snip) {
       const snippetText = decodeDuckDuckGoHtml(snip[1])

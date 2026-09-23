@@ -483,6 +483,19 @@ test('normalizeFirecrawlResponse: handles both data array and data.web shapes', 
   assert.equal(r2.sources[0].url, 'https://b.com')
 })
 
+test('normalizeFirecrawlResponse: the scraped page never becomes the snippet', () => {
+  const page = '# Title\n\n' + 'word '.repeat(2000) // ~10k chars, like a real scraped page
+  const capped = normalizeFirecrawlResponse({ data: [{ url: 'https://c.com', title: 'C', markdown: page }] })
+  assert.equal(capped.sources[0].snippet.length, 500)
+  assert.ok(!capped.sources[0].snippet.includes('\n'), 'markdown whitespace is collapsed')
+  // A short field always wins over the page body.
+  const short = normalizeFirecrawlResponse({ data: [{ url: 'https://d.com', description: 'short', markdown: page }] })
+  assert.equal(short.sources[0].snippet, 'short')
+  // Nothing to show → no snippet field at all.
+  const empty = normalizeFirecrawlResponse({ data: [{ url: 'https://e.com' }] })
+  assert.equal('snippet' in empty.sources[0], false)
+})
+
 // ─── Jina ───
 test('buildJinaRequest: single site → X-Site header, query strips site:; limit passed through', () => {
   const req = buildJinaRequest({ query: 'ai site:github.com', limit: 3 }, 'jina-k')
@@ -508,6 +521,14 @@ test('normalizeJinaResponse: array or { code, data } shapes', () => {
   assert.equal(r1.sources.length, 1)
   const r2 = normalizeJinaResponse({ code: 200, data: [{ url: 'https://b.com', title: 'B' }] })
   assert.equal(r2.sources[0].url, 'https://b.com')
+})
+
+test('normalizeJinaResponse: a page body is capped, a description wins', () => {
+  const page = 'body '.repeat(3000)
+  const capped = normalizeJinaResponse([{ url: 'https://c.com', title: 'C', content: page }])
+  assert.equal(capped.sources[0].snippet.length, 500)
+  const short = normalizeJinaResponse([{ url: 'https://d.com', title: 'D', description: 'd', content: page }])
+  assert.equal(short.sources[0].snippet, 'd')
 })
 
 // ─── Kagi ───
