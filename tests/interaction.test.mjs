@@ -31,7 +31,6 @@ test('deriveViewState: no key configured → grayed + Inactive + editable + no m
   const s = deriveViewState(initialState, provider(false))
   assert.equal(s.configured, false)
   assert.equal(s.statusKey, 'statusInactiveNoKey')
-  assert.equal(s.opacity, '0.55')
   assert.equal(s.canClear, false)
   assert.equal(s.canSave, false) // no input
   assert.equal(s.inputDisabled, false)
@@ -43,7 +42,6 @@ test('deriveViewState: key configured → grayed + masked + not editable + not S
   const s = deriveViewState(initialState, provider(true))
   assert.equal(s.configured, true)
   assert.equal(s.statusKey, 'statusActive')
-  assert.equal(s.opacity, '1')
   assert.equal(s.canClear, true)
   assert.equal(s.canSave, false) // configured, cannot save
   // Key: grayed out + masked + not editable

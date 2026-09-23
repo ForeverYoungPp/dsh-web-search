@@ -5,9 +5,17 @@ import vm from 'node:vm'
 
 let captured = null
 let mounted = false
+// apply() injects the host-native stylesheet, so the sandbox gets a document stub too.
+let injected = null
+const stubDocument = {
+  querySelector: () => null,
+  createElement: () => ({ setAttribute: () => {}, textContent: '' }),
+  head: { appendChild: (el) => { injected = el } },
+}
 
 const sandbox = {
   console,
+  document: stubDocument,
   window: {
     __ModuleLoader__: {
       load: (registration) => {
@@ -42,7 +50,7 @@ if (!Array.isArray(exported.inject) || exported.inject.some((x) => typeof x !== 
   throw new Error('bad inject payload')
 }
 
-// Exercise apply with a minimal stub ctx
+// Exercise apply with a minimal stub ctx.
 const stubCtx = {
   remote: { $mount: async () => { mounted = true; return () => {} } },
   effect: () => {},
@@ -56,4 +64,12 @@ const stubCtx = {
 }
 await exported.apply(stubCtx)
 if (!mounted) throw new Error('$mount was not called')
+
+// The stylesheet must use the host's design tokens, not fixed values.
+if (!injected || !injected.textContent.includes('.dws-btn')) throw new Error('stylesheet was not injected')
+if (!injected.textContent.includes('var(--dsw-alias-button-primary-fill)')) {
+  throw new Error('stylesheet does not consume host tokens')
+}
+if (injected.textContent.includes('#')) throw new Error('stylesheet contains a fixed colour')
+console.log('stylesheet injected:', injected.textContent.split('\n').length, 'rules, token-based only')
 console.log('CLIENT BUNDLE SMOKE OK')

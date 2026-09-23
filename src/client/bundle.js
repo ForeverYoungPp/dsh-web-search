@@ -157,6 +157,59 @@ window.__ModuleLoader__.load({
       errorSyncThrew: 'websearch.list() 同步抛错：{message}',
     };
 
+    // ================= Host-native stylesheet =================
+    // A hand-written bundle cannot import the host's CSS modules, so the values below are copied
+    // from the host's own components on this train (settings-models / settings-plugin-inventory /
+    // locale / theme) and every rule consumes --dsw-* tokens, so light/dark follows the host.
+    // Geometry copied verbatim: buttons 28/14/12-18 (host row-action size), inputs 32/8/14-22,
+    // cards 14 radius + elevation stroke + 12/14 padding, section gap 14 + max-width 760.
+    var STYLES = [
+      '.dws-page{padding:16px}',
+      '.dws-section{display:flex;flex-direction:column;gap:14px;max-width:760px;color:var(--dsw-alias-label-primary)}',
+      '.dws-title{margin:0;font-size:16px;font-weight:500;line-height:24px;color:var(--dsw-alias-label-primary)}',
+      '.dws-desc{margin:0;font-size:14px;line-height:22px;color:var(--dsw-alias-label-tertiary)}',
+      '.dws-alert{padding:10px 12px;border-radius:10px;font-size:13px;line-height:20px;background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary)}',
+      '.dws-card{box-sizing:border-box;background:var(--dsw-alias-bg-layer-3);border:0;border-radius:14px;box-shadow:var(--dsw-elevation-stroke);padding:12px 14px}',
+      '.dws-card--idle{opacity:.6}',
+      '.dws-card-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}',
+      '.dws-row-title{margin:0;font-size:14px;font-weight:500;line-height:22px;color:var(--dsw-alias-label-primary)}',
+      '.dws-status{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}',
+      '.dws-note{margin-top:10px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}',
+      '.dws-dot{flex:none;display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--dsw-alias-label-dimmed)}',
+      '.dws-dot--on{background:var(--dsw-alias-state-success-primary)}',
+      '.dws-row{display:flex;align-items:center;gap:8px}',
+      '.dws-row+.dws-row{margin-top:10px}',
+      '.dws-input{box-sizing:border-box;flex:1 1 auto;min-width:0;height:32px;padding:0 10px;border:.5px solid var(--dsw-alias-border-l4);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;line-height:22px}',
+      '.dws-input:focus{border-color:var(--dsw-alias-brand-primary);outline:none}',
+      '.dws-input::placeholder{color:var(--dsw-alias-label-dimmed)}',
+      '.dws-input:disabled{opacity:.6;cursor:default;background:var(--dsw-alias-bg-layer-2)}',
+      '.dws-btn{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:4px;height:28px;padding:0 10px;border:0;border-radius:14px;font:inherit;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background-color .12s var(--ds-ease-in-out);background:transparent;color:var(--dsw-alias-label-primary)}',
+      '.dws-btn:disabled{opacity:.4;cursor:default}',
+      '.dws-btn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--dsw-alias-border-l3)}',
+      '.dws-btn--primary{background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground)}',
+      '.dws-btn--primary:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}',
+      '.dws-btn--secondary{border:.5px solid var(--dsw-alias-border-l3)}',
+      '.dws-btn--secondary:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}',
+      '.dws-btn--danger{color:var(--dsw-alias-state-error-primary)}',
+      '.dws-btn--danger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger)}',
+      '.dws-feedback{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}',
+      '.dws-feedback--ok{color:var(--dsw-alias-state-success-primary)}',
+      '.dws-feedback--err{color:var(--dsw-alias-state-error-primary)}',
+      '.dws-feedback-slot{min-height:18px}',
+      '.dws-drag{cursor:grab}',
+    ].join('\n')
+
+    // The loader tags untagged <style> elements with its own data-plugin attribute, so this one
+    // carries data-plugin-css to stay identifiable. Runs at materialization, where document exists.
+    function injectStyles() {
+      if (typeof document === 'undefined' || !document.head) return
+      if (document.querySelector('style[data-plugin-css="dsh-web-search"]')) return
+      var el = document.createElement('style')
+      el.setAttribute('data-plugin-css', 'dsh-web-search')
+      el.textContent = STYLES
+      document.head.appendChild(el)
+    }
+
     // ================= Pure reducer (consistent with the dynamic version) =================
     var MASK = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
     var interactionInitial = { keyValue: '', saving: false, clearing: false, testing: false, lastResult: null, testResult: null };
@@ -205,7 +258,6 @@ window.__ModuleLoader__.load({
       var statusKey = configured
         ? (kind === 'endpoint' ? 'statusConfigured' : 'statusActive')
         : (kind === 'endpoint' ? 'statusInactiveNoEndpoint' : 'statusInactiveNoKey');
-      var opacity = configured ? '1' : '0.55';
       var placeholderKey = configured
         ? ''
         : (kind === 'endpoint' ? 'placeholderEndpoint' : 'placeholderApiKey');
@@ -219,7 +271,6 @@ window.__ModuleLoader__.load({
         testing: state.testing,
         testResult: state.testResult,
         statusKey: statusKey,
-        opacity: opacity,
         displayValue: displayValue,
         inputDisabled: inputDisabled,
         placeholderKey: placeholderKey,
@@ -291,72 +342,78 @@ window.__ModuleLoader__.load({
 
         var feedback = null;
         if (lastResult) {
-          if (lastResult.type === 'saved') feedback = React.createElement('span', { style: { fontSize: '12px', color: 'var(--dsw-alias-state-success-primary)' } }, t('saved'));
-          else if (lastResult.type === 'cleared') feedback = React.createElement('span', { style: { fontSize: '12px', color: 'var(--dsw-alias-label-secondary)' } }, t('cleared'));
-          else feedback = React.createElement('span', { style: { fontSize: '12px', color: 'var(--dsw-alias-state-error-primary)' } }, lastResult.message || t('error'));
+          var feedbackClass = 'dws-feedback';
+          var feedbackText;
+          if (lastResult.type === 'saved') {
+            feedbackClass += ' dws-feedback--ok';
+            feedbackText = t('saved');
+          } else if (lastResult.type === 'cleared') {
+            feedbackText = t('cleared');
+          } else {
+            feedbackClass += ' dws-feedback--err';
+            feedbackText = lastResult.message || t('error');
+          }
+          feedback = React.createElement('span', { className: feedbackClass }, feedbackText);
         }
 
         var testFeedback = null;
         if (testResult) {
-          if (testResult.type === 'success') testFeedback = React.createElement('span', { style: { fontSize: '12px', color: 'var(--dsw-alias-state-success-primary)' } }, testResult.message || t('ok'));
-          else testFeedback = React.createElement('span', { style: { fontSize: '12px', color: 'var(--dsw-alias-state-error-primary)' } }, testResult.message || t('errorTest'));
+          var testOk = testResult.type === 'success';
+          testFeedback = React.createElement(
+            'span',
+            { className: 'dws-feedback' + (testOk ? ' dws-feedback--ok' : ' dws-feedback--err') },
+            testResult.message || (testOk ? t('ok') : t('errorTest')),
+          );
         }
 
         // DuckDuckGo: keyless provider, display only, no input
         if (view.kind === 'none') {
-          return React.createElement('div', { style: { opacity: '1' } },
-            React.createElement('div', { style: { border: '1px solid var(--dsw-alias-border-l2)', borderRadius: '8px', padding: '16px', background: 'var(--dsw-alias-bg-layer-1)' } },
-              React.createElement('div', { style: { display: 'flex', alignItems: 'center' } },
-                React.createElement('span', { style: { width: '10px', height: '10px', borderRadius: '50%', display: 'inline-block', marginRight: '10px', background: 'var(--dsw-alias-state-success-primary)' } }),
-                React.createElement('strong', { style: { fontSize: '15px', color: 'var(--dsw-alias-label-primary)' } }, p.label || p.id),
-                React.createElement('span', { style: { fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)', marginLeft: '10px' } }, t('keylessNote')),
-              ),
-              React.createElement('div', { style: { marginTop: '10px', fontSize: '12px', color: 'var(--dsw-alias-label-secondary)' } }, t('keylessHint')),
+          return React.createElement('div', { className: 'dws-card' },
+            React.createElement('div', { className: 'dws-card-head' },
+              React.createElement('span', { className: 'dws-dot dws-dot--on' }),
+              React.createElement('span', { className: 'dws-row-title' }, p.label || p.id),
+              React.createElement('span', { className: 'dws-status' }, t('keylessNote')),
             ),
+            React.createElement('div', { className: 'dws-note' }, t('keylessHint')),
           );
         }
 
-        var btnStyle = { padding: '6px 0', width: '76px', textAlign: 'center', color: 'var(--dsw-alias-label-primary-foreground)', border: 'none', borderRadius: '4px', fontSize: '13px', flexShrink: '0' };
-        var clearBtnStyle = { padding: '6px 0', width: '64px', textAlign: 'center', color: 'var(--dsw-alias-label-primary-foreground)', border: 'none', borderRadius: '4px', fontSize: '13px', flexShrink: '0' };
-
-        return React.createElement('div', { style: { opacity: view.opacity } },
-          React.createElement('div', { style: { border: '1px solid var(--dsw-alias-border-l2)', borderRadius: '8px', padding: '16px', background: 'var(--dsw-alias-bg-layer-1)' } },
-            React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '14px' } },
-              React.createElement('span', { style: { width: '10px', height: '10px', borderRadius: '50%', display: 'inline-block', marginRight: '10px', background: view.configured ? 'var(--dsw-alias-state-success-primary)' : 'var(--dsw-alias-label-dimmed)' } }),
-              React.createElement('strong', { style: { fontSize: '15px', color: 'var(--dsw-alias-label-primary)' } }, p.label || p.id),
-              React.createElement('span', { style: { fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)', marginLeft: '10px' } }, t(view.statusKey)),
-            ),
-            React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
-              React.createElement('input', {
-                type: view.inputType,
-                value: view.displayValue,
-                disabled: view.inputDisabled,
-                onChange: function (ev) { dispatch({ type: 'CHANGE_KEY', value: ev.target.value }); },
-                placeholder: view.placeholderKey ? t(view.placeholderKey) : '',
-                style: { flex: '1', minWidth: '0', padding: '6px 10px', border: '1px solid var(--dsw-alias-border-l3)', borderRadius: '4px', fontSize: '13px', color: 'var(--dsw-alias-label-primary)', background: view.inputDisabled ? 'var(--dsw-alias-bg-layer-2)' : 'var(--dsw-specific-input-major)' },
-              }),
-              React.createElement('button', {
-                onClick: handleSave,
-                disabled: !view.canSave,
-                style: Object.assign({}, btnStyle, { background: view.canSave ? 'var(--dsw-alias-button-primary-fill)' : 'var(--dsw-alias-button-primary-dimmed)', cursor: view.canSave ? 'pointer' : 'default' }),
-              }, state.saving ? t('saving') : t('save')),
-              React.createElement('button', {
-                onClick: handleClear,
-                disabled: !view.canClear,
-                style: Object.assign({}, clearBtnStyle, { background: view.canClear ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-button-primary-dimmed)', cursor: view.canClear ? 'pointer' : 'default' }),
-              }, state.clearing ? t('clearing') : t('clear')),
-            ),
-            React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px' } },
-              React.createElement('button', {
-                onClick: handleTest,
-                disabled: !view.canTest,
-                title: t('testHint'),
-                style: Object.assign({}, btnStyle, { background: view.canTest ? 'var(--dsw-alias-button-info-fill)' : 'var(--dsw-alias-button-primary-dimmed)', cursor: view.canTest ? 'pointer' : 'default' }),
-              }, state.testing ? t('testing') : t('test')),
-              testFeedback ? React.createElement('div', { style: { minHeight: '16px' } }, testFeedback) : null,
-            ),
-            React.createElement('div', { style: { marginTop: '10px', minHeight: '16px' } }, feedback),
+        return React.createElement('div', { className: view.configured ? 'dws-card' : 'dws-card dws-card--idle' },
+          React.createElement('div', { className: 'dws-card-head' },
+            React.createElement('span', { className: view.configured ? 'dws-dot dws-dot--on' : 'dws-dot' }),
+            React.createElement('span', { className: 'dws-row-title' }, p.label || p.id),
+            React.createElement('span', { className: 'dws-status' }, t(view.statusKey)),
           ),
+          React.createElement('div', { className: 'dws-row' },
+            React.createElement('input', {
+              className: 'dws-input',
+              type: view.inputType,
+              value: view.displayValue,
+              disabled: view.inputDisabled,
+              onChange: function (ev) { dispatch({ type: 'CHANGE_KEY', value: ev.target.value }); },
+              placeholder: view.placeholderKey ? t(view.placeholderKey) : '',
+            }),
+            React.createElement('button', {
+              className: 'dws-btn dws-btn--primary',
+              onClick: handleSave,
+              disabled: !view.canSave,
+            }, state.saving ? t('saving') : t('save')),
+            React.createElement('button', {
+              className: 'dws-btn dws-btn--danger',
+              onClick: handleClear,
+              disabled: !view.canClear,
+            }, state.clearing ? t('clearing') : t('clear')),
+          ),
+          React.createElement('div', { className: 'dws-row' },
+            React.createElement('button', {
+              className: 'dws-btn dws-btn--secondary',
+              onClick: handleTest,
+              disabled: !view.canTest,
+              title: t('testHint'),
+            }, state.testing ? t('testing') : t('test')),
+            React.createElement('div', { className: 'dws-feedback-slot' }, testFeedback),
+          ),
+          React.createElement('div', { className: 'dws-feedback-slot' }, feedback),
         );
       }
 
@@ -455,29 +512,29 @@ window.__ModuleLoader__.load({
         }, [data.providers, refreshProviders]);
 
         if (data.loading) {
-          return React.createElement('div', { style: { padding: '20px', color: 'var(--dsw-alias-label-tertiary)' } }, t('loading'));
+          return React.createElement('div', { className: 'dws-page dws-status' }, t('loading'));
         }
 
         var cards = data.providers.map(function (p, i) {
           return React.createElement('div', {
             key: p.id,
+            className: 'dws-drag',
             draggable: true,
             onDragStart: function () { handleDragStart(i); },
             onDragOver: function (ev) { ev.preventDefault(); },
             onDrop: function (ev) { ev.preventDefault(); handleDrop(i); },
             onDragEnd: handleDragEnd,
-            style: { cursor: 'grab' },
             title: t('dragHint'),
           }, React.createElement(ProviderCard, { p: p, onSave: handleSetKey, onClear: handleClearKey, onTest: handleTestKey }));
         });
 
-        return React.createElement('div', { style: { padding: '16px' } },
-          React.createElement('h2', { style: { fontSize: '18px', marginBottom: '8px', color: 'var(--dsw-alias-label-primary)' } }, t('title')),
-          React.createElement('p', { style: { fontSize: '13px', color: 'var(--dsw-alias-label-secondary)', marginBottom: '16px', lineHeight: '1.5' } },
-            t('description')
+        return React.createElement('div', { className: 'dws-page' },
+          React.createElement('div', { className: 'dws-section' },
+            React.createElement('h2', { className: 'dws-title' }, t('title')),
+            React.createElement('p', { className: 'dws-desc' }, t('description')),
+            data.error ? React.createElement('div', { className: 'dws-alert' }, data.error) : null,
+            React.createElement('div', { className: 'dws-section' }, cards),
           ),
-          data.error ? React.createElement('div', { style: { padding: '8px 12px', background: 'var(--dsw-alias-interactive-bg-hover-danger)', color: 'var(--dsw-alias-state-error-primary)', borderRadius: '4px', marginBottom: '12px', fontSize: '13px' } }, data.error) : null,
-          React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px' } }, cards),
         );
       }
 
@@ -491,6 +548,10 @@ window.__ModuleLoader__.load({
       var locale = ctx.locale;
       var t = locale ? locale.bind(NS) : function (key) { return EN[key] || key; };
       if (locale) ctx.effect(function () { return locale.register(NS, { en: EN, zh: ZH }); });
+
+      // Nothing to undo: the <style> element lives as long as the document, like the host's own
+      // injected stylesheets, and apply() only runs once per materialization.
+      injectStyles();
 
       // Mount the websearch namespace (self-mounted by this package; api-remotes assembly only mounts namespaces it knows)
       const dispose = await ctx.remote.$mount(contribution);
