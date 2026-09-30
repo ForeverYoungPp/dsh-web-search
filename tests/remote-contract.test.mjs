@@ -9,6 +9,8 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { evaluatePluginCompatibility, getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
 import { hostContribution, WebSearchController, WEBSEARCH_NAMESPACE, WEBSEARCH_SERVICE_KEY } from '../src/remote.js'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
 
@@ -182,4 +184,45 @@ test('markRemote descriptor is discoverable via remoteMethods (SRC fallback)', (
   // exactly what markRemote writes.
   const methods = remoteMethods(controller).map(m => m.method).sort()
   assert.deepEqual(methods, ['list', 'setKey', 'setOrder', 'testProvider', 'unsetKey'].sort())
+})
+
+// ─── Compatibility gate (D1): the REAL gate from the installed app-boot, plus a
+// non-vacuous control reconstructed from the pre-change peer set ───
+const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+
+// The pre-change manifest is not shipped; its peer set is reconstructed as a literal so the
+// control runs the same gate against the shape that produced the reproduced refusal.
+const PRE_CHANGE_PEERS = {
+  '@deepseek-ai/dsh-api-remotes': '^0.1.5-rc.3',
+  '@deepseek-ai/dsh-tools': '^0.1.5-rc.3',
+  '@deepseek-ai/dsh-typert-protocol': '^0.1.5-rc.3',
+  '@deepseek-ai/dsh-web': '^0.1.5-rc.3',
+  '@deepseek-ai/cordis': '^4.0.2',
+}
+
+test('the installed app-boot IS the runtime under test', () => {
+  assert.equal(getDshRuntimeVersion(), '0.2.0-rc.2')
+})
+
+test('compatibility gate admits the target-revision manifest', () => {
+  // `undefined` is the gate's "no incompatibility" result: nothing is pushed into skippedBundles.
+  assert.equal(evaluatePluginCompatibility(manifest), undefined)
+})
+
+test('compatibility gate still refuses the pre-change peers (non-vacuous control)', () => {
+  const verdict = evaluatePluginCompatibility({
+    name: '@ian_p/dsh-web-search',
+    version: '0.1.5-rc.3',
+    peerDependencies: PRE_CHANGE_PEERS,
+  })
+  assert.ok(verdict, 'the gate accepted the pre-change peers')
+  assert.equal(verdict.runtimeVersion, '0.2.0-rc.2')
+  assert.deepEqual(Object.keys(verdict.peers).sort(), [
+    '@deepseek-ai/dsh-api-remotes',
+    '@deepseek-ai/dsh-tools',
+    '@deepseek-ai/dsh-typert-protocol',
+    '@deepseek-ai/dsh-web',
+  ])
+  // cordis is excluded by the gate's @deepseek-ai/dsh* name filter, not by its range.
+  assert.equal(verdict.peers['@deepseek-ai/cordis'], undefined)
 })
