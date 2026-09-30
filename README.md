@@ -34,7 +34,7 @@ The browser half adds a dedicated **Search providers** settings page for keys, c
   npm install --global @deepseek-ai/dsh@0.2.0-rc.2
   ```
 
-  Every `@deepseek-ai/dsh*` service it injects (`web`, `credentials`, `typert`) comes from that host build, so those packages are declared as peers at the same train version (`^0.2.0-rc.2`) rather than listed package by package. The components declared on their own:
+  Every `@deepseek-ai/dsh*` piece it uses comes from that host build. The three the plugin imports or is gated on are declared as peers at the same train version (`^0.2.0-rc.2`): `dsh-web` (the `ctx.web` seam), `dsh-typert-protocol` (the Remote descriptors) and `dsh-api-remotes` (named in `dsh.client.inject`); `credentials` is reached through `ctx.get('credentials')` and is not declared. The components declared on their own:
 
   | Component | Version | Role |
   | --- | --- | --- |
@@ -50,6 +50,8 @@ The browser half adds a dedicated **Search providers** settings page for keys, c
 ```bash
 dsh plugin --profile web add @ian_p/dsh-web-search
 ```
+
+The command resolves the `latest` dist-tag, which currently points at the `0.2.0-rc.1` prerelease; pin it when you need a reproducible install (`… add @ian_p/dsh-web-search@0.2.0-rc.1`). A host still on DSH `0.1.5-rc.3` is not compatible with that version and needs `@ian_p/dsh-web-search@0.1.5-rc.3` instead — the two trains are not interchangeable. Per-version notes live on [GitHub Releases](https://github.com/ForeverYoungPp/dsh-web-search/releases).
 
 **Local development** — run inside the harness source workspace; the overlay loads `src/index.js` directly, so no build step is needed:
 
