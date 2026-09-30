@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@ian_p/dsh-web-search"><img src="https://img.shields.io/npm/v/@ian_p/dsh-web-search?style=flat-square&amp;color=5B4CF0" alt="npm 版本"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B7285?style=flat-square" alt="MIT 许可证"></a>
-  <img src="https://img.shields.io/badge/DSH-0.1.5--rc.3-5B4CF0?style=flat-square" alt="DSH 宿主版本">
+  <img src="https://img.shields.io/badge/DSH-0.2.0--rc.2-5B4CF0?style=flat-square" alt="DSH 宿主版本">
   <img src="https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-339933?style=flat-square&amp;logo=node.js" alt="Node 版本">
 </p>
 
@@ -28,18 +28,18 @@
 ## 环境要求
 
 - **Node.js** `^22.19` 或 `>=24`
-- **DeepSeek Harness `0.1.5-rc.3`** —— 本插件的 Typert Remote 描述符是手写的，因此只针对一个 DSH 列车：
+- **DeepSeek Harness `0.2.0-rc.2`** —— 本插件的 Typert Remote 描述符是手写的，因此只针对一个 DSH 列车：
 
   ```bash
-  npm install --global @deepseek-ai/dsh@0.1.5-rc.3
+  npm install --global @deepseek-ai/dsh@0.2.0-rc.2
   ```
 
-  它注入的每一个 `@deepseek-ai/dsh*` 服务（`web`、`credentials`、`typert`）都由该宿主构建提供，因此这些包以同一列车版本声明为 peer，不再逐包罗列。本项目单独声明的组件：
+  它注入的每一个 `@deepseek-ai/dsh*` 服务（`web`、`credentials`、`typert`）都由该宿主构建提供，因此这些包以同一列车版本声明为 peer（`^0.2.0-rc.2`），不再逐包罗列。本项目单独声明的组件：
 
   | 组件 | 版本 | 作用 |
   | --- | --- | --- |
-  | `@deepseek-ai/dsh` | `0.1.5-rc.3` | 宿主运行时（所有 `@deepseek-ai/dsh*` peer 的来源） |
-  | `@deepseek-ai/cordis` | `^4.0.2` | 插件/上下文框架（peer + dev） |
+  | `@deepseek-ai/dsh` | `0.2.0-rc.2` | 宿主运行时（所有 `@deepseek-ai/dsh*` peer 的来源） |
+  | `@deepseek-ai/cordis` | `~4.0.4` | 插件/上下文框架（peer + dev，与列车自身声明的范围一致） |
   | `react` | `^18.2` | 仅浏览器端（dev） |
   | `typescript` | `^7.0.2` | `src/host-core.js` 的类型检查（dev） |
 
@@ -125,7 +125,9 @@ pnpm dsh web --patch /path/to/dsh-web-search/patch.web.yml
 
 ### 设置页
 
-注册为独立设置区块 **搜索 Provider**（id `web-search-providers`，order 12），与原生网页搜索配置页分开。它按生效顺序列出 provider，可保存/清除 key 或 endpoint、运行连接测试、拖拽卡片调整回退顺序。页面对宿主通信走插件的 `websearch` Remote 命名空间（`list` / `setKey` / `unsetKey` / `setOrder` / `testProvider`）。
+注册为 Plugins 页面里 `plugins.item` 插槽上的插件页面（id `web-search-providers`，order 12），与原生网页搜索页分开（原生页保留自己的 `web-search` 页面）。它按生效顺序列出 provider，可保存/清除 key 或 endpoint、运行连接测试、拖拽卡片调整回退顺序。页面对宿主通信走插件的 `websearch` Remote 命名空间（`list` / `setKey` / `unsetKey` / `setOrder` / `testProvider`）。
+
+同一个组件渲染两种视图：Plugins 页面列表卡片用的一行 `summary`，以及详情页的完整 provider 列表。
 
 页面向宿主 `locale` 服务注册 `en` / `zh` 字典（侧边栏标签同样跟随），并用 `--dsw-*` 变量 + 宿主自己的按钮/输入框/卡片尺寸上色，因此语言与主题都跟宿主一致。
 
@@ -153,7 +155,7 @@ dsh-web-search/
 │                            # 设置页 + 只保留一份的状态机
 ├── scripts/build.mjs        # 构建：把 src/ 干净拷成 dist/（发布树）
 ├── dist/                    # 构建产物——发布到 npm，被 git 忽略
-├── tests/                   # 134 个纯函数测试 + 12 个环境相关测试（见下）
+├── tests/                   # 140 个纯函数测试 + 19 个环境相关测试（见下）
 ├── docs/DESIGN.md           # 依赖的宿主契约，以及代码为何长这样
 └── package.json             # main/exports → dist/，files: ["dist/", …]，prepare 构建 dist/
 ```
@@ -163,18 +165,19 @@ dsh-web-search/
 ```bash
 pnpm install             # 安装 peer/dev 依赖，并跑 prepare（构建 dist/）
 pnpm run build           # 把 dist/ 从 src/ 生成（干净拷贝，无打包器、无新依赖）
-pnpm test                # 134 个纯函数测试（node:test，零依赖）
-pnpm run test:rpc        # 12 个环境相关测试（解析 0.1.5-rc.3 的 peer）
+pnpm test                # 140 个纯函数测试（node:test，零依赖）
+pnpm run test:rpc        # 19 个环境相关测试（解析 0.2.0-rc.2 的 peer）
 pnpm run typecheck       # tsc -p tsconfig.types.json（src/host-core.js 的 JSDoc 类型）
 pnpm run prepublishOnly  # 发布前：构建 + 两层测试 + 类型检查
 ```
 
 | 层级 | 套件 | 数量 | 覆盖内容 |
 | --- | --- | --- | --- |
+| 纯函数 | `tests/manifest.test.mjs` | 6 | 单列车 manifest 守卫：peer 范围、已死的 `dsh-tools` 声明、无运行时版本探测、bundle 机制未变 |
 | 纯函数 | `tests/host-core.test.mjs` | 97 | 查询解析、各 provider 请求体、响应归一化、snippet/answer 策略、凭据记录辅助函数 |
 | 纯函数 | `tests/interaction.test.mjs` | 37 | 设置页状态机（跑在发货的 client bundle 上） |
-| 环境 | `tests/remote-contract.test.mjs` | 11 | Typert Remote 贡献对已安装宿主契约的校验 |
-| 环境 | `tests/client-bundle.smoke.mjs` | 1 | bundle 注册、`apply()`、注入的样式表 |
+| 环境 | `tests/remote-contract.test.mjs` | 18 | 对已安装运行时的兼容性闸门、Typert Remote 贡献，以及 client bundle 严格 codec 在两个 registry face 上的校验 |
+| 环境 | `tests/client-bundle.smoke.mjs` | 1 | bundle 注册、`plugins.item` 注册、`apply()`、注入的样式表 |
 
 `src/index.js`（host 入口：传输、链路、凭据操作、`ctx.web` 注入）没有测试覆盖——它需要 harness 运行时；`docs/DESIGN.md` 记录这留下了什么未钉住的东西。
 

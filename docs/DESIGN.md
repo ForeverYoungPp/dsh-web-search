@@ -4,16 +4,16 @@ Why the code is shaped this way: the host contracts this plugin depends on, the 
 applies to results, and the things that are deliberately *not* done. Read this before changing
 `src/index.js` (the host entry) or `src/client/bundle.js` (the browser half).
 
-Everything below was verified against the DSH train this plugin targets, **`0.1.5-rc.3`**.
+Everything below was verified against the DSH train this plugin targets, **`0.2.0-rc.2`**.
 
 ## 1. Host contracts we depend on
 
 | Contract | Evidence | What we rely on |
 | --- | --- | --- |
-| Typert Remote strict codec | `dsh-typert-registry/lib/client.js:1342`, `lib/index.js:550` | This train validates `codec.schema.parse` is a function, so the client descriptors ship `{ mode: 'strict', typeSymbol, schema: { parse } }`. **`0.1.7-rc.1` replaces this with `create(): TypertSchema`** (`packages/typert/protocol/src/types.ts:269-295`, enforced at `packages/typert/registry/src/service.ts:722-731`): moving the host past `0.1.5-rc.3` **requires** that codec change, and it fails at `$mount`, i.e. the settings page silently never registers. |
+| Typert Remote strict codec | `dsh-typert-registry/lib/index.js:565`, `lib/client.js:1357` | This train requires a strict codec to expose `create(): TypertSchema`, where `TypertSchema` is a `{ parse }` interface — the bare `schema` field the plugin used to ship is rejected with `strict codec has no create() factory`. The client descriptors ship `{ mode: 'strict', typeSymbol: 'dsh-web-search#json', create: () => ({ parse }) }` (one shared, stateless schema). `tests/remote-contract.test.mjs` proves both registry faces accept the shipped shape and reject the pre-change one. |
 | SRC method descriptor | `@deepseek-ai/dsh-typert-protocol/remote-methods` | The fallback discovery path in `src/remote.js` (`markRemote`). A test in `tests/remote-contract.test.mjs` asserts it stays discoverable, so it is not dead weight. |
 | `locale` service | `dsh-client-locale/lib/client.js:1256-1283, 1378` | `register(ns, dicts)` **throws if the namespace already has that locale**; `bind(ns)` resolves the active locale per call; `subscribe(fn)` drives re-render. |
-| Settings slots | `settings.section` list; `label` may be a thunk | The page registers `{ id: 'web-search-providers', order: 12 }`; the thunk keeps the sidebar label following the language. |
+| Settings slots | `plugins.item` list (the plugin-manager's own item ledger) | The page registers as its own entry `{ id: 'web-search-providers', order: 12 }` — ids do not collide with the native page's `web-search` — and the `label` thunk keeps the entry following the language. |
 | Theme | `dsh-client-ui-theme/lib/client.js:1047-1059` | `--dsw-*` tokens on `body` / `body[data-ds-dark-theme]`. **There are no radius/spacing tokens** — radii and paddings are per-component literals on this train. |
 | Web seam | `dsh-web/lib/index.js:97-98, 133-141` | `registerSearchProvider({ id, available, search })`; `capSources()` slices only when `sources.length > maxResults` **and sets `truncated: true`**; `searchProviders` / `searchProviderId` are TypeScript-private but real runtime properties, used for the native fallback. |
 | Tool boundary | `dsh-tool-web/lib/index.js:307-314` (`execute`), `:118-124` (`searchMetaFromValue`), `dsh-client-ui-tool/lib/client.js:768-783` (`webCardModel`) | The tool projects only `content`/`sources`/`truncated`, the card meta is built from exactly those plus `answer`, and the card model reads exactly those — **there is no field for the serving provider**. |
@@ -105,9 +105,10 @@ to publish a prerelease onto `latest`.
 
 ## 6. Testing, and what is not pinned
 
-134 pure tests (`host-core` 97, `interaction` 37) run with zero dependencies; 12 environment
-tests (`remote-contract` 11, `client-bundle.smoke` 1) need the peers installed and cover the
-Typert contribution, bundle registration, `apply()` and the injected stylesheet.
+140 pure tests (`host-core` 97, `interaction` 37, `manifest` 6) run with zero dependencies;
+19 environment tests (`remote-contract` 18, `client-bundle.smoke` 1) need the peers installed and
+cover the compatibility gate, the Typert contribution, the strict-codec contract on both registry
+faces, bundle registration, `apply()` and the injected stylesheet.
 
 Not covered, on purpose or for lack of a runtime:
 
@@ -118,8 +119,11 @@ Not covered, on purpose or for lack of a runtime:
 
 ## 7. Known gaps and next steps
 
-- **Moving the host to `0.1.7-rc.1`+ requires the codec change in §1** and a peers/devDeps bump;
-  nothing else in the client half was found to depend on the train.
+- **The adaptation to `0.2.0-rc.2` is done**, not pending: peers moved to `^0.2.0-rc.2` (cordis
+  `~4.0.4`, `@deepseek-ai/dsh-tools` dropped as a dead declaration), the strict codec moved from
+  `schema` to `create()` (§1), and the page moved from `settings.section` to `plugins.item` (§4).
+  The one thing a test cannot prove is that the page is reachable in a running host: the
+  Plugins-page acceptance step is manual, and the slot line is the isolated revert point.
 - `@deepseek-ai/dsh-client-ui-primitives` is requirable but unused: its prop contract is compiled
   into a 280 kB single-line bundle and cannot be verified read-only, so the settings page copies
   the CSS contract instead. Adopting the real `Button`/`Input` (and its hover/focus handling) is

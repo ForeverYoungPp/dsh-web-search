@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@ian_p/dsh-web-search"><img src="https://img.shields.io/npm/v/@ian_p/dsh-web-search?style=flat-square&amp;color=5B4CF0" alt="npm version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B7285?style=flat-square" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/DSH-0.1.5--rc.3-5B4CF0?style=flat-square" alt="DSH host version">
+  <img src="https://img.shields.io/badge/DSH-0.2.0--rc.2-5B4CF0?style=flat-square" alt="DSH host version">
   <img src="https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-339933?style=flat-square&amp;logo=node.js" alt="Node version">
 </p>
 
@@ -22,24 +22,24 @@ The browser half adds a dedicated **Search providers** settings page for keys, c
 | **8 providers, one chain** | Tavily, Brave, Exa, Firecrawl, Jina, Kagi, SearXNG, DuckDuckGo — any order, any subset. |
 | **Native `web_search` integration** | The patch override routes the harness's own `web_search` tool through this chain. |
 | **Fail-loud** | With the patch not applied the native tool reports `WEB_PROVIDER_AMBIGUOUS` instead of silently degrading. |
-| **Host-native settings page** | Localized (en/zh) through the host `locale` service and styled with the host's own control contract (`--dsw-*` design tokens), so it follows the host language and light/dark theme. |
+| **Host-native plugin page** | Localized (en/zh) through the host `locale` service and styled with the host's own control contract (`--dsw-*` design tokens), so it follows the host language and light/dark theme. |
 | **Auditable fallback** | One host-log line per search names every provider that was skipped or failed, then the one that served. |
 
 ## Requirements
 
 - **Node.js** `^22.19` or `>=24`
-- **DeepSeek Harness `0.1.5-rc.3`** — this plugin hand-writes its Typert Remote descriptors, so it targets one DSH train:
+- **DeepSeek Harness `0.2.0-rc.2`** — this plugin hand-writes its Typert Remote descriptors, so it targets one DSH train:
 
   ```bash
-  npm install --global @deepseek-ai/dsh@0.1.5-rc.3
+  npm install --global @deepseek-ai/dsh@0.2.0-rc.2
   ```
 
-  Every `@deepseek-ai/dsh*` service it injects (`web`, `credentials`, `typert`) comes from that host build, so those packages are declared as peers at the same train version rather than listed package by package. The components declared on their own:
+  Every `@deepseek-ai/dsh*` service it injects (`web`, `credentials`, `typert`) comes from that host build, so those packages are declared as peers at the same train version (`^0.2.0-rc.2`) rather than listed package by package. The components declared on their own:
 
   | Component | Version | Role |
   | --- | --- | --- |
-  | `@deepseek-ai/dsh` | `0.1.5-rc.3` | Host runtime (source of every `@deepseek-ai/dsh*` peer) |
-  | `@deepseek-ai/cordis` | `^4.0.2` | Plugin/context framework (peer + dev) |
+  | `@deepseek-ai/dsh` | `0.2.0-rc.2` | Host runtime (source of every `@deepseek-ai/dsh*` peer) |
+  | `@deepseek-ai/cordis` | `~4.0.4` | Plugin/context framework (peer + dev, the range the train itself declares) |
   | `react` | `^18.2` | Browser half only (dev) |
   | `typescript` | `^7.0.2` | Type check over `src/host-core.js` (dev) |
 
@@ -125,7 +125,9 @@ All provider secrets live in harness **credential records** under the `dsh-web-s
 
 ### Settings page
 
-Registered as the isolated settings section **Search providers** (id `web-search-providers`, order 12), separate from the native web-search config page. It lists providers in effective fallback order and lets you save or clear a key/endpoint, run a connection test, and drag the cards to reorder the chain. It talks to the host over the plugin's `websearch` Remote namespace (`list` / `setKey` / `unsetKey` / `setOrder` / `testProvider`).
+Registered as a plugin page on the `plugins.item` slot (id `web-search-providers`, order 12) inside the Plugins page, separate from the native web-search page (which keeps its own `web-search` page). It lists providers in effective fallback order and lets you save or clear a key/endpoint, run a connection test, and drag the cards to reorder the chain. It talks to the host over the plugin's `websearch` Remote namespace (`list` / `setKey` / `unsetKey` / `setOrder` / `testProvider`).
+
+The page renders two views from one component: a one-line `summary` for the Plugins-page list card, and the full provider list on the detail page.
 
 The page registers `en` / `zh` dictionaries with the host `locale` service (sidebar label included) and paints itself with `--dsw-*` tokens using the host's own button, input and card geometry, so both language and theme follow the host.
 
@@ -153,7 +155,7 @@ dsh-web-search/
 │                            # the settings page and its single-copy state machine
 ├── scripts/build.mjs        # build: clean copy of src/ → dist/ (the publishable tree)
 ├── dist/                    # build output — published to npm, git-ignored
-├── tests/                   # 134 pure + 12 environment-dependent tests (see below)
+├── tests/                   # 140 pure + 19 environment-dependent tests (see below)
 ├── docs/DESIGN.md           # host contracts this plugin depends on, and why the code is shaped this way
 └── package.json             # main/exports → dist/, files: ["dist/", …], prepare builds dist/
 ```
@@ -163,18 +165,19 @@ dsh-web-search/
 ```bash
 pnpm install             # installs peers/dev deps and runs `prepare`, which builds dist/
 pnpm run build           # stage dist/ from src/ (clean copy, no bundler, no new dependency)
-pnpm test                # 134 pure-function tests (node:test, zero dependencies)
-pnpm run test:rpc        # 12 environment-dependent tests (resolves the 0.1.5-rc.3 peers)
+pnpm test                # 140 pure-function tests (node:test, zero dependencies)
+pnpm run test:rpc        # 19 environment-dependent tests (resolves the 0.2.0-rc.2 peers)
 pnpm run typecheck       # tsc -p tsconfig.types.json (JSDoc types of src/host-core.js)
 pnpm run prepublishOnly  # build + both test tiers + typecheck, before a publish
 ```
 
 | Tier | Suite | Count | What it covers |
 | --- | --- | --- | --- |
+| Pure | `tests/manifest.test.mjs` | 6 | single-train manifest guards: peer ranges, the dead `dsh-tools` declaration, no runtime version sniffing, unchanged bundle mechanisms |
 | Pure | `tests/host-core.test.mjs` | 97 | query parsing, provider request bodies, response normalization, snippet/answer policy, credential-record helpers |
 | Pure | `tests/interaction.test.mjs` | 37 | the settings page state machine, run against the shipped client bundle |
-| Env | `tests/remote-contract.test.mjs` | 11 | the Typert Remote contribution against the installed host contract |
-| Env | `tests/client-bundle.smoke.mjs` | 1 | bundle registration, `apply()`, and the injected stylesheet |
+| Env | `tests/remote-contract.test.mjs` | 18 | the compatibility gate against the installed runtime, the Typert Remote contribution, and the client bundle's strict codecs on both registry faces |
+| Env | `tests/client-bundle.smoke.mjs` | 1 | bundle registration, the `plugins.item` registration, `apply()`, and the injected stylesheet |
 
 `src/index.js` (the host entry: transport, chain, credential ops, `ctx.web` injection) has no test coverage — it needs the harness runtime; `docs/DESIGN.md` records what that leaves unpinned.
 
