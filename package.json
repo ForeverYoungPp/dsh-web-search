@@ -62,7 +62,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "prepare": "node scripts/build.mjs",
-    "test": "node tests/host-core.test.mjs && node tests/interaction.test.mjs && echo OK",
+    "test": "node tests/manifest.test.mjs && node tests/host-core.test.mjs && node tests/interaction.test.mjs && echo OK",
     "test:rpc": "node tests/remote-contract.test.mjs && node tests/client-bundle.smoke.mjs && echo OK",
     "typecheck": "tsc -p tsconfig.types.json",
     "prepublishOnly": "npm run build && npm test && npm run test:rpc && npm run typecheck"
