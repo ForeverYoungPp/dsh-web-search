@@ -52,15 +52,25 @@ if (!Array.isArray(exported.inject) || exported.inject.some((x) => typeof x !== 
 
 // Exercise apply with a minimal stub ctx. `slots` RECORDS the registration instead of
 // being stubbed as absent, so the slot name/id/order the plugin really registers are
-// asserted rather than assumed.
+// asserted rather than assumed. `locale` records the dictionaries apply() registers and
+// `effect` runs the effect body so both the dictionary registration and the $mount
+// disposer are observable.
 const slotsCalls = []
 const slots = {
   inject: (name, cb) => { slotsCalls.push(['inject', name]); return cb() },
   register: (options, component) => { slotsCalls.push(['register', options, component]); return () => {} },
 }
+let registered = null
+const effects = []
+const mountDisposer = () => {}
+const locale = {
+  bind: (_ns) => (key) => (registered && registered.en[key]) || key,
+  register: (_ns, dicts) => { registered = dicts; return () => {} },
+}
 const stubCtx = {
-  remote: { $mount: async () => { mounted = true; return () => {} } },
-  effect: () => {},
+  remote: { $mount: async () => { mounted = true; return mountDisposer } },
+  effect: (cb) => { effects.push(cb()); return () => {} },
+  locale: locale,
   get: (key) => (key === 'slots' ? slots : {
     list: async () => ({ ok: true, value: { providers: [] } }),
     setKey: async () => ({ ok: true }),
@@ -71,6 +81,13 @@ const stubCtx = {
 }
 await exported.apply(stubCtx)
 if (!mounted) throw new Error('$mount was not called')
+
+// 0. The client loader waits on exactly these services, and the $mount disposer must reach
+// the effect scope (otherwise the mounted contribution could never be unmounted).
+if (JSON.stringify(exported.inject) !== JSON.stringify(['slots', 'remote', 'locale'])) {
+  throw new Error('inject list changed: ' + JSON.stringify(exported.inject))
+}
+if (!effects.includes(mountDisposer)) throw new Error('$mount disposer was not passed to ctx.effect')
 
 // 1. Exactly one slots.inject call, on the standard 0.2.0 plugin-owned page slot.
 const injectCalls = slotsCalls.filter((call) => call[0] === 'inject')
@@ -101,8 +118,19 @@ if (!page || typeof page !== 'object' || page.type !== 'element') throw new Erro
 
 // 5. The namespace is the plugin's own.
 if (options.locale !== 'dsh-web-search') throw new Error('options.locale: ' + JSON.stringify(options.locale))
+
+// 6. The `summary` key exists and is non-empty in BOTH dictionaries — the Plugins-page card
+// one-liner is translated per locale, and a missing key would fall back to the bare key.
+if (!registered || !registered.en || !registered.zh) throw new Error('locale dictionaries were not registered')
+for (const [localeName, dicts] of Object.entries(registered)) {
+  const value = dicts.summary
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`summary key missing for locale "${localeName}": ` + JSON.stringify(value))
+  }
+}
 console.log('slot registration:', injectCalls[0][1], options.id, options.order, 'label=' + JSON.stringify(label))
 console.log('summary:', JSON.stringify(summary))
+console.log('summary keys:', registered.en.summary, '|', registered.zh.summary)
 
 // The stylesheet must use the host's design tokens, not fixed values, and the primary button
 // must follow the Plugins page contract (label-primary fill, bg-layer-3 text).
