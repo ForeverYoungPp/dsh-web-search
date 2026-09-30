@@ -10,9 +10,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import vm from 'node:vm'
+import { createRequire } from 'node:module'
 import { evaluatePluginCompatibility, getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
+import { TypertRegistry } from '@deepseek-ai/dsh-typert-registry'
 import { hostContribution, WebSearchController, WEBSEARCH_NAMESPACE, WEBSEARCH_SERVICE_KEY } from '../src/remote.js'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
+
+const nodeRequire = createRequire(import.meta.url)
 
 // ─── Shared controller factory ───
 function createController(overrides = {}) {
@@ -225,4 +230,106 @@ test('compatibility gate still refuses the pre-change peers (non-vacuous control
   ])
   // cordis is excluded by the gate's @deepseek-ai/dsh* name filter, not by its range.
   assert.equal(verdict.peers['@deepseek-ai/cordis'], undefined)
+})
+
+// ─── Strict-codec contract on BOTH registry faces of the installed runtime (D2) ───
+// The descriptors the host would receive: apply() mounts the contribution through
+// ctx.remote.$mount(contribution), so the stub captures that argument. Loaded through
+// globalThis.window + dynamic import (the tests/interaction.test.mjs technique) so the
+// descriptor objects stay same-realm; only the client *registry* is cross-realm by
+// necessity, which is why the rejection assertions below match thrown message content
+// instead of object identity or `instanceof`.
+let bundleRegistration = null
+globalThis.window = {
+  __ModuleLoader__: {
+    load: (registration) => {
+      bundleRegistration = registration
+    },
+  },
+}
+// apply() injects the host-native stylesheet, so the sandbox needs a document stub.
+globalThis.document = {
+  querySelector: () => null,
+  createElement: () => ({ setAttribute: () => {}, textContent: '' }),
+  head: { appendChild: () => {} },
+}
+await import('../src/client/bundle.js')
+
+const clientBundle = bundleRegistration.factory((spec) => {
+  if (spec === 'react') return { createElement: () => ({ type: 'element' }) }
+  throw new Error('unexpected require: ' + spec)
+})
+
+let mountedContribution = null
+await clientBundle.apply({
+  remote: {
+    $mount: async (contribution) => {
+      mountedContribution = contribution
+      return () => {}
+    },
+  },
+  effect: () => {},
+  get: () => null,
+})
+const clientDescriptors = mountedContribution.descriptors
+
+// Both faces of the real 0.2.0-rc.2 validator, reached through their only public path:
+// registry.remotes.register() validates before touching ctx.effect.
+const ctxOf = () => ({ reflect: { provide: () => () => {} }, logger: { warn() {} }, effect: () => () => {} })
+const hostRegistry = new TypertRegistry(ctxOf())
+
+function loadClientRegistry() {
+  // The client face is not importable: lib/client.js IS a window.__ModuleLoader__ bundle,
+  // so evaluate it in a vm sandbox and call its factory with the installed cordis.
+  const entry = nodeRequire.resolve('@deepseek-ai/dsh-typert-registry/client')
+  let registration = null
+  const sandbox = { console, window: { __ModuleLoader__: { load: (r) => { registration = r } } } }
+  vm.runInNewContext(readFileSync(entry, 'utf8'), sandbox, { filename: 'dsh-typert-registry/client.js' })
+  const clientFace = registration.factory(nodeRequire)
+  let registry = null
+  // Service registers itself through ctx.reflect.provide(name, self, check) — capture it.
+  clientFace.apply({
+    ...ctxOf(),
+    reflect: {
+      provide: (_name, self) => {
+        registry = self
+        return () => {}
+      },
+    },
+  })
+  return registry
+}
+const clientRegistry = loadClientRegistry()
+
+const probe = (descriptors) => ({ package: 'dsh-web-search-contract-probe', descriptors })
+
+test('every shipped strict codec exposes create() returning a parseable schema', () => {
+  const codecs = clientDescriptors.flatMap((d) => [d.result, ...d.parameters.map((p) => p.codec)])
+  // 5 descriptors, one result codec each plus one parameter codec on each of the four
+  // arg-taking verbs: the loop below is not a ghost loop.
+  assert.equal(codecs.length, 9)
+  for (const codec of codecs) {
+    assert.equal(typeof codec.create, 'function', 'strict codec has no create() factory')
+    assert.equal(typeof codec.create().parse, 'function', 'create() did not return a { parse } schema')
+  }
+})
+
+test('host-face validator accepts the shipped descriptors', () => {
+  assert.doesNotThrow(() => hostRegistry.remotes.register(probe(clientDescriptors)))
+})
+
+test('client-face validator accepts the shipped descriptors', () => {
+  assert.doesNotThrow(() => clientRegistry.remotes.register(probe(clientDescriptors)))
+})
+
+test('both faces reject the pre-change codec shape (negative control)', () => {
+  const PRE_CHANGE_CODEC = { mode: 'strict', typeSymbol: 'dsh-web-search#json', schema: { parse: (v) => v } }
+  const warped = [{ ...clientDescriptors[0], result: PRE_CHANGE_CODEC }]
+  for (const [face, registry] of [['host', hostRegistry], ['client', clientRegistry]]) {
+    assert.throws(
+      () => registry.remotes.register(probe(warped)),
+      /no create\(\) factory/,
+      `${face} validator accepted the pre-change codec shape`,
+    )
+  }
 })
