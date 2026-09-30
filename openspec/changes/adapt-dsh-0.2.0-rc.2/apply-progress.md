@@ -215,11 +215,13 @@ counts written into README.md/README_ZH.md/docs/DESIGN.md == the counts these ru
 
 - **Delivery decision consumed from the parent:** single PR, `pnpm-lock.yaml` treated as generated
   and excluded from the 400-line authored budget (`review_budget_lines: 400`, `ask-on-risk`).
-- **Actual authored diff (base `d05efec` → HEAD, excluding `pnpm-lock.yaml`): 522 changed lines —
-  460 insertions / 62 deletions.** Per file: `tests/manifest.test.mjs` +165 (new),
-  `tests/remote-contract.test.mjs` +150, `tests/client-bundle.smoke.mjs` +77/-3,
-  `src/client/bundle.js` +29/-?, `package.json` +25, `README.md` +29, `README_ZH.md` +27,
-  `docs/DESIGN.md` +20. Plus ~370 generated `pnpm-lock.yaml` lines in task 1 (net-reduced later).
+- **Actual authored diff (base `d05efec` → HEAD, excluding `pnpm-lock.yaml` and the SDD artifacts
+  themselves): 522 changed lines — 460 insertions / 62 deletions.** Exact per-file numbers
+  (`insertions/deletions`): `tests/manifest.test.mjs` 165/0 (new), `tests/remote-contract.test.mjs`
+  150/0, `tests/client-bundle.smoke.mjs` 72/5, `package.json` 11/14, `src/client/bundle.js` 19/10,
+  `README.md` 16/13, `README_ZH.md` 15/12, `docs/DESIGN.md` 12/8. Separately generated:
+  `pnpm-lock.yaml` 387/198 (367 changed lines in task 1: 322/45, then a net-reducing rewrite in
+  task 6: 92/180), and the SDD artifacts 1518 insertions (planning docs, not review surface).
 - **Budget disclosure (do not hide this): the authored count is above the 400-line budget**, while
   tasks.md forecast ≈280 (Medium risk). The drift is entirely in the red test suites, which came in
   ~2.2× the forecast (`manifest` 165 vs 75, `remote-contract` 150 vs 110, `smoke` 77 vs 30). No
