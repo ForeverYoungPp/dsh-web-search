@@ -34,7 +34,7 @@
   npm install --global @deepseek-ai/dsh@0.2.0-rc.2
   ```
 
-  它注入的每一个 `@deepseek-ai/dsh*` 服务（`web`、`credentials`、`typert`）都由该宿主构建提供，因此这些包以同一列车版本声明为 peer（`^0.2.0-rc.2`），不再逐包罗列。本项目单独声明的组件：
+  它用到的每一个 `@deepseek-ai/dsh*` 组件都由该宿主构建提供。真正被 import 或参与门禁的三个包以同一列车版本声明为 peer（`^0.2.0-rc.2`）：`dsh-web`（`ctx.web` 缝）、`dsh-typert-protocol`（Remote 描述符）与 `dsh-api-remotes`（写在 `dsh.client.inject`）；`credentials` 经 `ctx.get('credentials')` 取得，故不声明。本项目单独声明的组件：
 
   | 组件 | 版本 | 作用 |
   | --- | --- | --- |
@@ -50,6 +50,8 @@
 ```bash
 dsh plugin --profile web add @ian_p/dsh-web-search
 ```
+
+该命令解析的是 `latest` 标签，它目前指向 `0.2.0-rc.1` 这个预发版；需要可复现安装时请显式固定版本（`… add @ian_p/dsh-web-search@0.2.0-rc.1`）。仍停留在 DSH `0.1.5-rc.3` 的宿主与该版本不兼容，应装 `@ian_p/dsh-web-search@0.1.5-rc.3` —— 两个列车不可互换。各版本发布说明见 [GitHub Releases](https://github.com/ForeverYoungPp/dsh-web-search/releases)。
 
 **本地开发** —— 在 harness 源码工作区里执行；该覆盖文件直接加载 `src/index.js`，不需要构建：
 
