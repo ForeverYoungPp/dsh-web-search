@@ -30,10 +30,12 @@ window.__ModuleLoader__.load({
     const React = require('react');
 
     // ================= Remote contribution (mirrors the SRC side of src/remote.js) =================
-    // Client requires strict codec; TypertSchema is just a { parse(value) } interface, transparent passthrough works, no zod needed.
+    // Client requires a strict codec exposing `create(): TypertSchema`, where TypertSchema is a
+    // { parse(value) } interface — a transparent passthrough works, no zod needed. The schema holds
+    // no state, so one shared object is handed out (the gateway calls create().parse(value) per decode).
     var passthrough = { parse: function (value) { return value; } };
     function jsonCodec() {
-      return { mode: 'strict', typeSymbol: 'dsh-web-search#json', schema: passthrough };
+      return { mode: 'strict', typeSymbol: 'dsh-web-search#json', create: function () { return passthrough; } };
     }
 
     var contribution = {
@@ -94,6 +96,7 @@ window.__ModuleLoader__.load({
     var NS = 'dsh-web-search';
     var EN = {
       title: 'Search providers',
+      summary: 'Configure the providers behind the native web_search tool',
       description: 'These third-party providers back the native web_search tool, falling back automatically in the order you configure. Keyed providers (Tavily, Brave, Exa, Firecrawl, Jina, Kagi) activate as soon as you save an API key; SearXNG activates once you provide its endpoint URL; DuckDuckGo needs no key and is the last-resort fallback. Drag the cards to set the priority order.',
       loading: 'Loading Web Search providers...',
       save: 'Save',
@@ -126,6 +129,7 @@ window.__ModuleLoader__.load({
     };
     var ZH = {
       title: '搜索 Provider',
+      summary: '配置原生 web_search 工具背后的 provider',
       description: '这些第三方 provider 支撑原生 web_search 工具，按你配置的顺序自动回退。带 key 的 provider（Tavily、Brave、Exa、Firecrawl、Jina、Kagi）保存 API key 后即生效；SearXNG 在你填入 endpoint 后生效；DuckDuckGo 无需 key，是最后的兜底。拖拽卡片可调整优先级顺序。',
       loading: '正在加载网络搜索 provider...',
       save: '保存',
@@ -590,15 +594,20 @@ window.__ModuleLoader__.load({
 
       var slots = ctx.get('slots');
       if (!slots) return;
-      slots.inject('settings.section', function () {
+      // One stable component per apply(), so the Plugins-page detail panel never remounts the
+      // subtree; the same component serves the list card's one-liner and the detail page.
+      var page = function (props) {
+        if (props && props.view === 'summary') return t('summary');
+        return React.createElement(components.WebSearchSettings, null);
+      };
+      slots.inject('plugins.item', function () {
         return slots.register(
-          // Unique id (web-search-providers) → appears as a side-by-side page in the settings sidebar,
-          // isolated from the native web_search config page, does not replace it (settings.section is a list, unique id = unique page).
-          // The label is a thunk so the sidebar entry follows the host language.
-          { name: 'settings.section', id: 'web-search-providers', order: 12, label: function () { return t('title'); } },
-          function () {
-            return React.createElement(components.WebSearchSettings, null);
-          }
+          // Unique id (web-search-providers) → listed as its own entry next to the native
+          // web-search page, does not replace it (plugins.item is a list, unique id = unique page).
+          // The label is a thunk so the entry follows the host language, and `locale` lets the
+          // renderer re-render it on a language switch.
+          { name: 'plugins.item', id: 'web-search-providers', order: 12, label: function () { return t('title'); }, locale: NS },
+          page,
         );
       });
     }
