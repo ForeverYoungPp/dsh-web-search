@@ -1,6 +1,6 @@
 {
   "name": "@ian_p/dsh-web-search",
-  "version": "0.1.5-rc.3",
+  "version": "0.2.0-rc.1",
   "description": "Multi-provider third-party web search for the DeepSeek Harness: routes the native web_search tool through a configurable provider fallback chain, with an isolated provider settings page.",
   "type": "module",
   "main": "dist/index.js",
@@ -25,17 +25,13 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-api-remotes": "^0.1.5-rc.3",
-    "@deepseek-ai/dsh-tools": "^0.1.5-rc.3",
-    "@deepseek-ai/dsh-typert-protocol": "^0.1.5-rc.3",
-    "@deepseek-ai/dsh-web": "^0.1.5-rc.3",
-    "@deepseek-ai/cordis": "^4.0.2"
+    "@deepseek-ai/dsh-api-remotes": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-typert-protocol": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-web": "^0.2.0-rc.2",
+    "@deepseek-ai/cordis": "~4.0.4"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-api-remotes": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-tools": {
       "optional": true
     },
     "@deepseek-ai/dsh-typert-protocol": {
@@ -69,12 +65,11 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/cordis": "~4.0.4",
     "@deepseek-ai/dsh-app-boot": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-tools": "0.1.5-rc.3",
-    "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.0-rc.2",
     "@deepseek-ai/dsh-typert-registry": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-web": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-web": "0.2.0-rc.2",
     "react": "^18.2.0",
     "typescript": "^7.0.2"
   }
