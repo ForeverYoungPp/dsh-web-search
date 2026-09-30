@@ -70,8 +70,10 @@
   "license": "MIT",
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-app-boot": "0.2.0-rc.2",
     "@deepseek-ai/dsh-tools": "0.1.5-rc.3",
     "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-typert-registry": "0.2.0-rc.2",
     "@deepseek-ai/dsh-web": "0.1.5-rc.3",
     "react": "^18.2.0",
     "typescript": "^7.0.2"
